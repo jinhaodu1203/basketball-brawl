@@ -77,7 +77,7 @@ basketball_demo/
 └── README.md
 ```
 
-## 下一步可以做什么
+## 接下来的任务
 
 1. **放入真正的贴图**：按`assets/SPRITE_GUIDE.md`里的规范，
    把找好的2D人物/动漫/动物贴图放进`assets/player1/`和
@@ -110,5 +110,3 @@ basketball_demo/
      难度越低延迟越长
    - 让"Hard as Hell"档AI在被断球后有概率立刻用冲刺技能反抢，
      增加压迫感
-
-想先深入哪一块，随时告诉我，我可以直接帮你把代码写出来。
