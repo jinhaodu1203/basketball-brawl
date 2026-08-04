@@ -163,8 +163,19 @@ class Player:
     用于单人模式里的AI对手。
     """
 
-    def __init__(self, x, y, color, controls, facing_right=True, name="P1",
-                 sprite_folder=None, frame_counts=None, ai_controlled=False):
+    def __init__(
+            self,
+            x,
+            y,
+            color,
+            controls,
+            facing_right=True,
+            name="P1",
+            sprite_folder=None,
+            frame_counts=None,
+            ai_controlled=False,
+            character_config=None,
+    ):
         self.x = x
         self.y = y
         self.vx = 0.0
@@ -175,6 +186,65 @@ class Player:
         self.name = name
         self.on_ground = False
         self.score = 0
+
+        # ---- 角色配置 ----
+        self.character_config = character_config or {}
+
+        self.character_id = self.character_config.get(
+            "id",
+            "default",
+        )
+
+        self.character_name = self.character_config.get(
+            "name",
+            name,
+        )
+
+        self.skill_type = self.character_config.get(
+            "skill_type",
+            "speed_dash",
+        )
+
+        self.skill_name = self.character_config.get(
+            "skill_name",
+            "Dash",
+        )
+
+        self.skill_description = self.character_config.get(
+            "skill_description",
+            "",
+        )
+
+        # 每个角色自己的基础能力
+        self.base_move_speed = self.character_config.get(
+            "move_speed",
+            MOVE_SPEED,
+        )
+
+        self.base_jump_velocity = self.character_config.get(
+            "jump_velocity",
+            JUMP_VELOCITY,
+        )
+
+        self.base_dash_speed = self.character_config.get(
+            "dash_speed",
+            DASH_SPEED,
+        )
+
+        self.base_dash_duration = self.character_config.get(
+            "dash_duration",
+            DASH_DURATION_FRAMES,
+        )
+
+        self.base_dash_cooldown = self.character_config.get(
+            "dash_cooldown",
+            DASH_COOLDOWN_FRAMES,
+        )
+
+        self.base_steal_range = self.character_config.get(
+            "steal_range",
+            STEAL_RANGE,
+        )
 
         self.possession_immune_timer = 0  # 拿到球后的短暂保护
         self.steal_cooldown_timer = 0
@@ -192,10 +262,12 @@ class Player:
         # 调用 apply_ai_difficulty 后只会覆盖这一个AI实例自己的数值，
         # 不会碰到 constants.py 里的全局常量，因此不会影响真人玩家的手感。
         normal_preset = AI_DIFFICULTY_PRESETS["normal"]
-        self.move_speed = MOVE_SPEED
-        self.dash_speed = DASH_SPEED
-        self.dash_cooldown_max = DASH_COOLDOWN_FRAMES
-        self.steal_range = STEAL_RANGE
+        self.move_speed = self.base_move_speed
+        self.jump_velocity = self.base_jump_velocity
+        self.dash_speed = self.base_dash_speed
+        self.dash_duration_max = self.base_dash_duration
+        self.dash_cooldown_max = self.base_dash_cooldown
+        self.steal_range = self.base_steal_range
         self.ai_shot_miss_chance = normal_preset["shot_miss_chance"]
         self.ai_dash_trigger_chance = normal_preset["dash_trigger_chance"]
         self.ai_three_point_shot_chance = normal_preset["three_point_shot_chance"]
@@ -223,10 +295,28 @@ class Player:
         所以不会影响真人玩家(比如玩家1)的手感。
         """
         preset = AI_DIFFICULTY_PRESETS.get(difficulty, AI_DIFFICULTY_PRESETS["normal"])
-        self.move_speed = MOVE_SPEED * preset["move_speed_multiplier"]
-        self.dash_speed = DASH_SPEED * preset["dash_speed_multiplier"]
-        self.dash_cooldown_max = max(1, int(DASH_COOLDOWN_FRAMES * preset["dash_cooldown_multiplier"]))
-        self.steal_range = STEAL_RANGE * preset["steal_range_multiplier"]
+        self.move_speed = (
+                self.base_move_speed
+                * preset["move_speed_multiplier"]
+        )
+
+        self.dash_speed = (
+                self.base_dash_speed
+                * preset["dash_speed_multiplier"]
+        )
+
+        self.dash_cooldown_max = max(
+            1,
+            int(
+                self.base_dash_cooldown
+                * preset["dash_cooldown_multiplier"]
+            ),
+        )
+
+        self.steal_range = (
+                self.base_steal_range
+                * preset["steal_range_multiplier"]
+        )
         self.ai_shot_miss_chance = preset["shot_miss_chance"]
         self.ai_dash_trigger_chance = preset["dash_trigger_chance"]
         self.ai_three_point_shot_chance = preset["three_point_shot_chance"]
@@ -251,7 +341,7 @@ class Player:
     def _apply_dash(self, want_dash):
         if want_dash and self.dash_cooldown_timer <= 0 and not self.is_dashing:
             self.is_dashing = True
-            self.dash_timer = DASH_DURATION_FRAMES
+            self.dash_timer = self.dash_duration_max
             self.dash_cooldown_timer = self.dash_cooldown_max
 
         if self.is_dashing:
@@ -263,7 +353,7 @@ class Player:
 
     def _apply_jump(self, want_jump):
         if want_jump and self.on_ground:
-            self.vy = JUMP_VELOCITY
+            self.vy = self.jump_velocity
             self.on_ground = False
 
     def _apply_shoot(self, want_shoot, ball):

@@ -41,6 +41,12 @@ from constants import (
 )
 from entities import Player, Ball
 
+from characters import (
+    CHARACTER_ORDER,
+    CHARACTERS,
+    get_character,
+)
+
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 
 
@@ -294,6 +300,234 @@ def select_mode(screen, font, title_font):
         pygame.display.flip()
         clock.tick(FPS)
 
+def select_character(
+    screen,
+    font,
+    small_font,
+    title_font,
+    player_label,
+):
+    """
+    基础角色选择界面。
+
+    数字键：
+        1 = Cheetah
+        2 = Gorilla
+        3 = Ninja
+
+    返回角色ID。
+    """
+    clock = pygame.time.Clock()
+
+    key_to_index = {
+        pygame.K_1: 0,
+        pygame.K_KP1: 0,
+        pygame.K_2: 1,
+        pygame.K_KP2: 1,
+        pygame.K_3: 2,
+        pygame.K_KP3: 2,
+    }
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+
+                selected_index = key_to_index.get(event.key)
+
+                if (
+                    selected_index is not None
+                    and selected_index < len(CHARACTER_ORDER)
+                ):
+                    return CHARACTER_ORDER[selected_index]
+
+        screen.fill(COLOR_BG)
+
+        title = title_font.render(
+            f"{player_label}: Choose Your Character",
+            True,
+            COLOR_TEXT,
+        )
+
+        screen.blit(
+            title,
+            (
+                SCREEN_WIDTH // 2 - title.get_width() // 2,
+                45,
+            ),
+        )
+
+        hint = small_font.render(
+            "Press 1, 2 or 3 to select",
+            True,
+            COLOR_TEXT,
+        )
+
+        screen.blit(
+            hint,
+            (
+                SCREEN_WIDTH // 2 - hint.get_width() // 2,
+                100,
+            ),
+        )
+
+        card_width = 250
+        card_height = 300
+        gap = 25
+
+        total_width = (
+            len(CHARACTER_ORDER) * card_width
+            + (len(CHARACTER_ORDER) - 1) * gap
+        )
+
+        start_x = SCREEN_WIDTH // 2 - total_width // 2
+        card_y = 145
+
+        for index, character_id in enumerate(CHARACTER_ORDER):
+            config = CHARACTERS[character_id]
+
+            card_x = start_x + index * (card_width + gap)
+
+            card_rect = pygame.Rect(
+                card_x,
+                card_y,
+                card_width,
+                card_height,
+            )
+
+            pygame.draw.rect(
+                screen,
+                (50, 50, 65),
+                card_rect,
+                border_radius=14,
+            )
+
+            pygame.draw.rect(
+                screen,
+                config["color"],
+                card_rect,
+                width=4,
+                border_radius=14,
+            )
+
+            # 角色编号
+            number_surface = font.render(
+                str(index + 1),
+                True,
+                COLOR_TEXT,
+            )
+
+            screen.blit(
+                number_surface,
+                (
+                    card_x + 15,
+                    card_y + 12,
+                ),
+            )
+
+            # 临时角色预览
+            # 以后这里替换成 portrait.png
+            preview_center = (
+                card_x + card_width // 2,
+                card_y + 75,
+            )
+
+            pygame.draw.circle(
+                screen,
+                config["color"],
+                preview_center,
+                45,
+            )
+
+            pygame.draw.circle(
+                screen,
+                COLOR_TEXT,
+                preview_center,
+                45,
+                width=3,
+            )
+
+            # 角色名字
+            name_surface = font.render(
+                config["name"],
+                True,
+                COLOR_TEXT,
+            )
+
+            screen.blit(
+                name_surface,
+                (
+                    card_x
+                    + card_width // 2
+                    - name_surface.get_width() // 2,
+                    card_y + 135,
+                ),
+            )
+
+            # 技能名称
+            skill_surface = small_font.render(
+                config["skill_name"],
+                True,
+                (255, 215, 0),
+            )
+
+            screen.blit(
+                skill_surface,
+                (
+                    card_x
+                    + card_width // 2
+                    - skill_surface.get_width() // 2,
+                    card_y + 180,
+                ),
+            )
+
+            # 简介
+            description_surface = small_font.render(
+                config["description"],
+                True,
+                COLOR_TEXT,
+            )
+
+            screen.blit(
+                description_surface,
+                (
+                    card_x
+                    + card_width // 2
+                    - description_surface.get_width() // 2,
+                    card_y + 215,
+                ),
+            )
+
+            # 基础属性
+            stats_text = (
+                f"SPD {config['move_speed']:.1f}   "
+                f"JMP {abs(config['jump_velocity']):.1f}"
+            )
+
+            stats_surface = small_font.render(
+                stats_text,
+                True,
+                COLOR_TEXT,
+            )
+
+            screen.blit(
+                stats_surface,
+                (
+                    card_x
+                    + card_width // 2
+                    - stats_surface.get_width() // 2,
+                    card_y + 250,
+                ),
+            )
+
+        pygame.display.flip()
+        clock.tick(FPS)
 
 def select_difficulty(screen, font, title_font):
     """
@@ -352,43 +586,81 @@ def play_session(screen, font, small_font, title_font):
         title_font,
     )
 
+    player1_character_id = select_character(
+        screen,
+        font,
+        small_font,
+        title_font,
+        "Player 1",
+    )
+
+    player2_label = "AI" if single_player else "Player 2"
+
+    player2_character_id = select_character(
+        screen,
+        font,
+        small_font,
+        title_font,
+        player2_label,
+    )
+
     ai_difficulty = (
-        select_difficulty(screen, font, title_font)
+        select_difficulty(
+            screen,
+            font,
+            title_font,
+        )
         if single_player
         else "normal"
+    )
+
+    player1_character = get_character(
+        player1_character_id,
+    )
+
+    player2_character = get_character(
+        player2_character_id,
     )
 
     player1 = Player(
         PLAYER1_SPAWN_X,
         GROUND_Y - PLAYER_HEIGHT,
-        COLOR_PLAYER1,
+        player1_character["color"],
         PLAYER1_CONTROLS,
         facing_right=False,
-        name="P1",
+        name=f"P1 - {player1_character['name']}",
         sprite_folder=os.path.join(
             ASSETS_DIR,
-            "player1",
+            "characters",
+            player1_character["sprite_folder"],
         ),
+        character_config=player1_character,
     )
 
-    player2_name = (
-        f"AI ({AI_DIFFICULTY_LABELS[ai_difficulty]})"
-        if single_player
-        else "P2"
-    )
+    if single_player:
+        player2_name = (
+            f"AI {player2_character['name']} "
+            f"({AI_DIFFICULTY_LABELS[ai_difficulty]})"
+        )
+    else:
+        player2_name = (
+            f"P2 - {player2_character['name']}"
+        )
 
     player2 = Player(
         PLAYER2_SPAWN_X,
         GROUND_Y - PLAYER_HEIGHT,
-        COLOR_PLAYER2,
+        player2_character["color"],
         PLAYER2_CONTROLS,
         facing_right=False,
         name=player2_name,
         sprite_folder=os.path.join(
             ASSETS_DIR,
-            "player2",
+            "characters",
+            player2_character["sprite_folder"],
         ),
         ai_controlled=single_player,
+        character_config=player2_character,
     )
 
     if single_player:
