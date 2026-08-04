@@ -1,97 +1,61 @@
-"""
-角色配置数据库。
-
-以后新增角色时，主要在这里添加配置，
-不需要为每个角色重新写一个 Player 类。
-
-贴图默认放在：
-assets/characters/<角色ID>/
-"""
+"""角色配置数据库。新增角色时优先修改这里。"""
 
 CHARACTERS = {
-    "cheetah": {
-        "id": "cheetah",
-        "name": "Cheetah",
-        "description": "Fast and aggressive.",
-        "color": (235, 180, 45),
-
-        # 基础能力
-        "move_speed": 6.5,
+    "djh": {
+        "id": "djh",
+        "name": "DJH",
+        "description": "Balanced player with an explosive first step.",
+        "color": (70, 130, 220),
+        "move_speed": 5.3,
         "jump_velocity": -14.0,
-        "dash_speed": 18.0,
-        "dash_duration": 12,
-        "dash_cooldown": 160,
-        "steal_range": 50,
-
-        # 技能信息
-        "skill_type": "speed_dash",
-        "skill_name": "Lightning Dash",
-        "skill_description": "A longer and faster dash.",
-
-        # 对应 assets/characters/cheetah/
-        "sprite_folder": "cheetah",
+        "steal_range": 55,
+        "ability_type": "dash",
+        "ability_name": "Lightning Dash",
+        "ability_description": "Rush forward at extreme speed.",
+        "ability_cooldown": 180,
+        "dash_speed": 17.0,
+        "dash_duration": 11,
+        "sprite_folder": "djh",
     },
-
     "gorilla": {
         "id": "gorilla",
         "name": "Gorilla",
-        "description": "Strong but slower.",
+        "description": "Powerful, heavy and difficult to stop.",
         "color": (125, 90, 75),
-
         "move_speed": 4.2,
         "jump_velocity": -12.5,
-        "dash_speed": 12.0,
-        "dash_duration": 9,
-        "dash_cooldown": 210,
         "steal_range": 68,
-
-        "skill_type": "ground_slam",
-        "skill_name": "Ground Slam",
-        "skill_description": "Knocks nearby opponents away.",
-
+        "ability_type": "ground_slam",
+        "ability_name": "Ground Slam",
+        "ability_description": "Knocks nearby opponents away.",
+        "ability_cooldown": 300,
+        "slam_range": 115,
+        "slam_horizontal_force": 13,
+        "slam_vertical_force": -8,
         "sprite_folder": "gorilla",
     },
-
     "ninja": {
         "id": "ninja",
         "name": "Ninja",
-        "description": "Agile and difficult to guard.",
+        "description": "Fast, agile and difficult to defend.",
         "color": (100, 90, 180),
-
-        "move_speed": 5.7,
-        "jump_velocity": -15.5,
-        "dash_speed": 15.0,
-        "dash_duration": 9,
-        "dash_cooldown": 180,
-        "steal_range": 52,
-
-        "skill_type": "double_jump",
-        "skill_name": "Shadow Jump",
-        "skill_description": "Can jump a second time in the air.",
-
+        "move_speed": 5.8,
+        "jump_velocity": -15.0,
+        "steal_range": 50,
+        "ability_type": "double_jump",
+        "ability_name": "Shadow Jump",
+        "ability_description": "Jump one more time in mid-air.",
+        "ability_cooldown": 0,
+        "double_jump_velocity": -13.5,
         "sprite_folder": "ninja",
     },
 }
 
-
-CHARACTER_ORDER = [
-    "cheetah",
-    "gorilla",
-    "ninja",
-]
-
-
-DEFAULT_PLAYER1_CHARACTER = "cheetah"
+CHARACTER_ORDER = ["djh", "gorilla", "ninja"]
+DEFAULT_PLAYER1_CHARACTER = "djh"
 DEFAULT_PLAYER2_CHARACTER = "gorilla"
 
 
 def get_character(character_id):
-    """
-    根据角色ID返回角色配置。
-
-    如果ID不存在，自动返回默认角色，防止游戏直接报错。
-    """
-    return CHARACTERS.get(
-        character_id,
-        CHARACTERS[DEFAULT_PLAYER1_CHARACTER],
-    )
+    """返回角色配置；ID 不存在时使用 DJH。"""
+    return CHARACTERS.get(character_id, CHARACTERS[DEFAULT_PLAYER1_CHARACTER])
