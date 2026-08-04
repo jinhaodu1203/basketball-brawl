@@ -25,5 +25,3 @@ assets/characters/ninja/
 ```
 
 每个角色目录未来可以加入：`portrait.png`、`idle.png`、`run.png`、`jump.png`、`shoot.png`。
-
-更新了作者的名字和加入了作者的角色。

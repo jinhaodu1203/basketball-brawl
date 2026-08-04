@@ -1,6 +1,5 @@
 """2D 篮球大乱斗主程序。"""
 
-import math
 import os
 import sys
 
@@ -21,6 +20,7 @@ from constants import (
 )
 from entities import Player, Ball
 from characters import CHARACTER_ORDER, CHARACTERS, get_character
+from arenas import ARENA_ORDER, ARENAS, get_arena, draw_arena
 
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 
@@ -43,66 +43,19 @@ PLAYER2_CONTROLS = {
 }
 
 
-def _draw_flattened_arc(screen, center_x, center_y, radius, color):
-    a = radius
-    b = max(6, int(radius * COURT_LINE_FLATTEN))
-    rect = pygame.Rect(center_x - a, center_y - b, a * 2, b * 2)
-    pygame.draw.arc(screen, color, rect, -math.pi / 2, math.pi / 2, COURT_LINE_WIDTH)
-
-
-def draw_court(screen):
-    dash_len = 14
-    y = 24
-    while y < GROUND_Y:
-        pygame.draw.line(
-            screen,
-            COLOR_COURT_LINE,
-            (HALF_COURT_X, y),
-            (HALF_COURT_X, y + dash_len),
-            COURT_LINE_WIDTH,
-        )
-        y += dash_len * 2
-
-    arc_cx = RIM_X
-    arc_cy = GROUND_Y - COURT_BAND_CENTER_Y_OFFSET
-    _draw_flattened_arc(screen, arc_cx, arc_cy, THREE_POINT_RADIUS, COLOR_COURT_LINE)
-    _draw_flattened_arc(screen, arc_cx, arc_cy, TWO_POINT_RADIUS, COLOR_COURT_LINE)
-
-    paint_rect = pygame.Rect(0, GROUND_Y - PAINT_BAND_HEIGHT, FREE_THROW_LINE_X, PAINT_BAND_HEIGHT)
-    pygame.draw.rect(screen, COLOR_PAINT_FILL, paint_rect)
-    pygame.draw.rect(screen, COLOR_COURT_LINE, paint_rect, COURT_LINE_WIDTH)
-    pygame.draw.circle(
-        screen,
-        COLOR_COURT_LINE,
-        (FREE_THROW_LINE_X, GROUND_Y - PAINT_BAND_HEIGHT),
-        FREE_THROW_CIRCLE_RADIUS,
-        COURT_LINE_WIDTH,
-    )
-
-    pygame.draw.line(
-        screen,
-        COLOR_HOOP,
-        (BACKBOARD_X, BACKBOARD_TOP_Y),
-        (BACKBOARD_X, BACKBOARD_TOP_Y + BACKBOARD_HEIGHT),
-        5,
-    )
-    pygame.draw.line(screen, COLOR_HOOP, (BACKBOARD_X, RIM_Y), (RIM_X, RIM_Y), 4)
-    pygame.draw.rect(screen, COLOR_HOOP, (HOOP_X, HOOP_Y, HOOP_WIDTH, HOOP_HEIGHT))
-
-
 def draw_scoreboard(screen, font, p1, p2):
     text = f"{p1.name}  {p1.score}  :  {p2.score}  {p2.name}"
     surface = font.render(text, True, COLOR_TEXT)
     screen.blit(surface, (SCREEN_WIDTH // 2 - surface.get_width() // 2, 20))
 
 
-def draw_score_popup(screen, title_font, points, timer):
+def draw_score_popup(screen, title_font, points, timer, arena):
     if timer <= 0 or points <= 0:
         return
     elapsed = SCORE_POPUP_DURATION_FRAMES - timer
-    popup_y = RIM_Y - 70 - elapsed * 0.35
+    popup_y = arena["rim_y"] - 70 - elapsed * 0.35
     surface = title_font.render(f"+{points}", True, SCORE_POPUP_COLOR)
-    screen.blit(surface, (int(RIM_X + 35 - surface.get_width() / 2), int(popup_y)))
+    screen.blit(surface, (int(arena["rim_x"] + 35 - surface.get_width() / 2), int(popup_y)))
 
 
 def draw_win_overlay(screen, font, title_font, small_font, winner, single_player, human_player):
@@ -226,6 +179,45 @@ def select_character(screen, font, small_font, title_font, player_label):
         clock.tick(FPS)
 
 
+
+def select_arena(screen, font, small_font, title_font):
+    clock = pygame.time.Clock()
+    key_to_index = {pygame.K_1: 0, pygame.K_KP1: 0, pygame.K_2: 1, pygame.K_KP2: 1, pygame.K_3: 2, pygame.K_KP3: 2}
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit(); sys.exit()
+                index = key_to_index.get(event.key)
+                if index is not None and index < len(ARENA_ORDER):
+                    return ARENA_ORDER[index]
+
+        screen.fill(COLOR_BG)
+        title = title_font.render("Choose Your Arena", True, COLOR_TEXT)
+        screen.blit(title, (SCREEN_WIDTH//2-title.get_width()//2, 55))
+        card_w, card_h, gap = 270, 290, 25
+        total = len(ARENA_ORDER)*card_w + (len(ARENA_ORDER)-1)*gap
+        start_x = SCREEN_WIDTH//2-total//2
+        for i, arena_id in enumerate(ARENA_ORDER):
+            arena = ARENAS[arena_id]
+            x, y = start_x+i*(card_w+gap), 150
+            rect = pygame.Rect(x,y,card_w,card_h)
+            pygame.draw.rect(screen, arena["sky_bottom"], rect, border_radius=16)
+            pygame.draw.rect(screen, arena["accent_color"], rect, 4, border_radius=16)
+            pygame.draw.rect(screen, arena["court_color"], (x+18,y+38,card_w-36,120), border_radius=10)
+            pygame.draw.line(screen, arena["line_color"], (x+145,y+55),(x+145,y+145),5)
+            number=font.render(str(i+1),True,COLOR_TEXT)
+            name=font.render(arena["name"],True,COLOR_TEXT)
+            desc=small_font.render(arena["description"],True,COLOR_TEXT)
+            screen.blit(number,(x+14,y+10))
+            screen.blit(name,(x+card_w//2-name.get_width()//2,y+185))
+            screen.blit(desc,(x+card_w//2-desc.get_width()//2,y+230))
+        hint=small_font.render("Press 1, 2 or 3 to select",True,COLOR_TEXT)
+        screen.blit(hint,(SCREEN_WIDTH//2-hint.get_width()//2,470))
+        pygame.display.flip(); clock.tick(FPS)
+
 def select_difficulty(screen, font, title_font):
     clock = pygame.time.Clock()
     while True:
@@ -257,11 +249,11 @@ def select_difficulty(screen, font, title_font):
         clock.tick(FPS)
 
 
-def reset_round(player1, player2, ball):
-    player1.reset_for_round(PLAYER1_SPAWN_X)
-    player2.reset_for_round(PLAYER2_SPAWN_X)
-    ball.x = BALL_SPAWN_X
-    ball.y = GROUND_Y - 200
+def reset_round(player1, player2, ball, arena):
+    player1.reset_for_round(arena["player1_spawn_x"])
+    player2.reset_for_round(arena["player2_spawn_x"])
+    ball.x = arena["ball_spawn_x"]
+    ball.y = arena["ground_y"] - 200
     ball.vx = 0
     ball.vy = 0
     ball.state = "loose"
@@ -285,9 +277,11 @@ def play_session(screen, font, small_font, title_font):
         select_difficulty(screen, font, title_font) if single_player else "normal"
     )
 
+    arena = get_arena(select_arena(screen, font, small_font, title_font))
+
     player1 = Player(
-        PLAYER1_SPAWN_X,
-        GROUND_Y - PLAYER_HEIGHT,
+        arena["player1_spawn_x"],
+        arena["ground_y"] - PLAYER_HEIGHT,
         player1_character["color"],
         PLAYER1_CONTROLS,
         facing_right=False,
@@ -296,6 +290,7 @@ def play_session(screen, font, small_font, title_font):
             ASSETS_DIR, "characters", player1_character["sprite_folder"]
         ),
         character_config=player1_character,
+        arena=arena,
     )
 
     player2_name = (
@@ -304,8 +299,8 @@ def play_session(screen, font, small_font, title_font):
         else f"P2 - {player2_character['name']}"
     )
     player2 = Player(
-        PLAYER2_SPAWN_X,
-        GROUND_Y - PLAYER_HEIGHT,
+        arena["player2_spawn_x"],
+        arena["ground_y"] - PLAYER_HEIGHT,
         player2_character["color"],
         PLAYER2_CONTROLS,
         facing_right=False,
@@ -315,15 +310,17 @@ def play_session(screen, font, small_font, title_font):
         ),
         ai_controlled=single_player,
         character_config=player2_character,
+        arena=arena,
     )
 
     if single_player:
         player2.apply_ai_difficulty(ai_difficulty)
 
     ball = Ball(
-        BALL_SPAWN_X,
-        GROUND_Y - 200,
+        arena["ball_spawn_x"],
+        arena["ground_y"] - 200,
         sprite_path=os.path.join(ASSETS_DIR, "ball.png"),
+        arena=arena,
     )
 
     players = [player1, player2]
@@ -350,7 +347,7 @@ def play_session(screen, font, small_font, title_font):
             if round_reset_timer > 0:
                 round_reset_timer -= 1
                 if round_reset_timer == 0:
-                    reset_round(player1, player2, ball)
+                    reset_round(player1, player2, ball, arena)
             else:
                 keys = pygame.key.get_pressed()
                 for player in players:
@@ -377,19 +374,13 @@ def play_session(screen, font, small_font, title_font):
         if score_popup_timer > 0:
             score_popup_timer -= 1
 
-        screen.fill(COLOR_BG)
-        pygame.draw.rect(
-            screen,
-            COLOR_GROUND,
-            (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y),
-        )
-        draw_court(screen)
+        draw_arena(screen, arena, ASSETS_DIR)
 
         for player in players:
             player.draw(screen, small_font)
         ball.draw(screen)
         draw_scoreboard(screen, font, player1, player2)
-        draw_score_popup(screen, title_font, score_popup_points, score_popup_timer)
+        draw_score_popup(screen, title_font, score_popup_points, score_popup_timer, arena)
 
         if game_over:
             draw_win_overlay(

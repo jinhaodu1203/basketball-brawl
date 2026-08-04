@@ -22,7 +22,7 @@ from animation import load_character_animations, draw_procedural_character, load
 
 
 class Ball:
-    def __init__(self, x, y, sprite_path=None):
+    def __init__(self, x, y, sprite_path=None, arena=None):
         self.x = x
         self.y = y
         self.vx = 0.0
@@ -33,6 +33,12 @@ class Ball:
         self.last_shooter = None
         self.shot_distance = 0
         self.frames = load_ball_frames(sprite_path, BALL_SPRITE_FRAME_COUNT)
+        self.arena = arena or {
+            "ground_y": GROUND_Y, "rim_x": HOOP_X + HOOP_WIDTH / 2,
+            "rim_y": HOOP_Y + HOOP_HEIGHT / 2, "hoop_width": HOOP_WIDTH,
+            "hoop_height": HOOP_HEIGHT, "three_point_distance": THREE_POINT_RADIUS,
+            "ball_spawn_x": BALL_SPAWN_X,
+        }
 
     def rect(self):
         return pygame.Rect(
@@ -75,8 +81,8 @@ class Ball:
             self.x = SCREEN_WIDTH - self.radius
             self.vx *= -BALL_BOUNCE_DAMPING
 
-        if self.y + self.radius > GROUND_Y:
-            self.y = GROUND_Y - self.radius
+        if self.y + self.radius > self.arena["ground_y"]:
+            self.y = self.arena["ground_y"] - self.radius
             self.vy *= -BALL_BOUNCE_DAMPING
             self.vx *= 0.85
             if abs(self.vy) < 2:
@@ -86,21 +92,25 @@ class Ball:
         if self.state != "flying" or self.vy <= 0:
             return None, 0
 
-        hoop_rect = pygame.Rect(HOOP_X, HOOP_Y, HOOP_WIDTH, HOOP_HEIGHT)
+        hoop_rect = pygame.Rect(
+            self.arena["rim_x"] - self.arena["hoop_width"] / 2,
+            self.arena["rim_y"] - self.arena["hoop_height"] / 2,
+            self.arena["hoop_width"], self.arena["hoop_height"]
+        )
         if not hoop_rect.collidepoint(self.x, self.y):
             return None, 0
 
         scorer = self.last_shooter
         points = (
             POINTS_OUTSIDE_THREE
-            if self.shot_distance > THREE_POINT_RADIUS
+            if self.shot_distance > self.arena["three_point_distance"]
             else POINTS_ON_OR_INSIDE_THREE
         )
         self.state = "loose"
         self.vx = 0
         self.vy = 0
-        self.x = BALL_SPAWN_X
-        self.y = GROUND_Y - 200
+        self.x = self.arena["ball_spawn_x"]
+        self.y = self.arena["ground_y"] - 200
         self.holder = None
         return scorer, points
 
@@ -128,6 +138,7 @@ class Player:
         frame_counts=None,
         ai_controlled=False,
         character_config=None,
+        arena=None,
     ):
         self.x = x
         self.y = y
@@ -139,6 +150,12 @@ class Player:
         self.name = name
         self.on_ground = False
         self.score = 0
+        self.arena = arena or {
+            "ground_y": GROUND_Y, "rim_x": HOOP_X + HOOP_WIDTH / 2,
+            "rim_y": HOOP_Y + HOOP_HEIGHT / 2, "hoop_width": HOOP_WIDTH,
+            "hoop_height": HOOP_HEIGHT, "three_point_distance": THREE_POINT_RADIUS,
+            "ball_spawn_x": BALL_SPAWN_X,
+        }
 
         self.character_config = character_config or {}
         self.character_id = self.character_config.get("id", "default")
@@ -233,8 +250,8 @@ class Player:
 
     def _apply_shoot(self, want_shoot, ball):
         if want_shoot and ball.state == "held" and ball.holder is self:
-            target_x = HOOP_X + HOOP_WIDTH / 2
-            target_y = HOOP_Y + HOOP_HEIGHT / 2
+            target_x = self.arena["rim_x"]
+            target_y = self.arena["rim_y"]
             shooter_x, shooter_y = self.center()
             shot_distance = (
                 (shooter_x - target_x) ** 2 + (shooter_y - target_y) ** 2
@@ -342,9 +359,9 @@ class Player:
 
         if ball.state == "held" and ball.holder is self:
             if self.ai_shot_target is None:
-                hoop_cx = HOOP_X + HOOP_WIDTH / 2
+                hoop_cx = self.arena["rim_x"]
                 if random.random() < self.ai_three_point_shot_chance:
-                    self.ai_shot_target = hoop_cx + THREE_POINT_RADIUS + AI_THREE_POINT_SHOOT_MARGIN
+                    self.ai_shot_target = hoop_cx + self.arena["three_point_distance"] + AI_THREE_POINT_SHOOT_MARGIN
                 else:
                     self.ai_shot_target = hoop_cx + AI_TWO_POINT_SHOOT_OFFSET
 
@@ -399,8 +416,8 @@ class Player:
         if ball.state != "held" or ball.holder is not self:
             return
 
-        hoop_center_x = HOOP_X + HOOP_WIDTH / 2
-        hoop_center_y = HOOP_Y + HOOP_HEIGHT / 2
+        hoop_center_x = self.arena["rim_x"]
+        hoop_center_y = self.arena["rim_y"]
         target_x = hoop_center_x
         target_y = hoop_center_y
 
@@ -448,8 +465,8 @@ class Player:
         self.x += self.vx
         self.y += self.vy
 
-        if self.y + PLAYER_HEIGHT >= GROUND_Y:
-            self.y = GROUND_Y - PLAYER_HEIGHT
+        if self.y + PLAYER_HEIGHT >= self.arena["ground_y"]:
+            self.y = self.arena["ground_y"] - PLAYER_HEIGHT
             self.vy = 0
             self.on_ground = True
             if self.ability_type == "double_jump":
@@ -472,7 +489,7 @@ class Player:
 
     def reset_for_round(self, x):
         self.x = x
-        self.y = GROUND_Y - PLAYER_HEIGHT
+        self.y = self.arena["ground_y"] - PLAYER_HEIGHT
         self.vx = 0
         self.vy = 0
         self.facing_right = False
@@ -515,7 +532,7 @@ class Player:
             pygame.draw.circle(
                 screen,
                 (255, 180, 80),
-                (int(self.x + PLAYER_WIDTH / 2), int(GROUND_Y - 4)),
+                (int(self.x + PLAYER_WIDTH / 2), int(self.arena["ground_y"] - 4)),
                 effect_radius,
                 width=4,
             )
