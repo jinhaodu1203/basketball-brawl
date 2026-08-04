@@ -13,6 +13,9 @@ from constants import (
     COLOR_BALL, COLOR_DASH_TRAIL,
     ANIMATION_SPEED, DEFAULT_FRAME_COUNTS, BALL_SPAWN_X,
     BALL_SPRITE_FRAME_COUNT, BALL_STATE_TO_FRAME,
+    SHOT_CHARGE_MAX_FRAMES, SHOT_PERFECT_MIN, SHOT_PERFECT_MAX,
+    SHOT_MAX_HORIZONTAL_ERROR, SHOT_METER_WIDTH, SHOT_METER_HEIGHT,
+    SHOT_METER_COLOR, SHOT_METER_PERFECT_COLOR, SHOT_METER_BG_COLOR,
     THREE_POINT_RADIUS, POINTS_OUTSIDE_THREE, POINTS_ON_OR_INSIDE_THREE,
     AI_SHOOT_STOP_DISTANCE, AI_TWO_POINT_SHOOT_OFFSET, AI_THREE_POINT_SHOOT_MARGIN,
     AI_SHOT_MISS_OFFSET, AI_STEAL_APPROACH_DISTANCE, AI_REBOUND_JUMP_RANGE,
@@ -191,6 +194,25 @@ class Player:
         )
         self.double_jump_available = False
 
+        # ---------- 蓄力投篮 ----------
+        self.shot_charge_max = self.character_config.get(
+            "shot_charge_max", SHOT_CHARGE_MAX_FRAMES
+        )
+        self.shot_charge_speed = self.character_config.get(
+            "shot_charge_speed", 1.0
+        )
+        self.shot_perfect_min = self.character_config.get(
+            "shot_perfect_min", SHOT_PERFECT_MIN
+        )
+        self.shot_perfect_max = self.character_config.get(
+            "shot_perfect_max", SHOT_PERFECT_MAX
+        )
+        self.shot_error_scale = self.character_config.get(
+            "shot_error_scale", SHOT_MAX_HORIZONTAL_ERROR
+        )
+        self.is_charging_shot = False
+        self.shot_charge = 0.0
+
         self.ai_controlled = ai_controlled
         self.ai_shot_target = None
         normal_preset = AI_DIFFICULTY_PRESETS["normal"]
@@ -248,15 +270,64 @@ class Player:
             if self.ability_type == "double_jump":
                 self.double_jump_available = True
 
-    def _apply_shoot(self, want_shoot, ball):
-        if want_shoot and ball.state == "held" and ball.holder is self:
-            target_x = self.arena["rim_x"]
-            target_y = self.arena["rim_y"]
-            shooter_x, shooter_y = self.center()
-            shot_distance = (
-                (shooter_x - target_x) ** 2 + (shooter_y - target_y) ** 2
-            ) ** 0.5
-            ball.shoot_towards(target_x, target_y, self, shot_distance)
+    def _handle_charge_shot(self, action_pressed, ball):
+        """真人玩家蓄力投篮：长按开始蓄力，松开后出手。"""
+        has_ball = ball.state == "held" and ball.holder is self
+
+        if not has_ball:
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+            return
+
+        if action_pressed:
+            self.is_charging_shot = True
+            self.shot_charge = min(
+                float(self.shot_charge_max),
+                self.shot_charge + self.shot_charge_speed,
+            )
+
+            # 蓄力到顶会自动出手，避免一直卡住。
+            if self.shot_charge >= self.shot_charge_max:
+                self._release_charged_shot(ball)
+            return
+
+        if self.is_charging_shot:
+            self._release_charged_shot(ball)
+
+    def _release_charged_shot(self, ball):
+        if ball.state != "held" or ball.holder is not self:
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+            return
+
+        hoop_x = self.arena["rim_x"]
+        hoop_y = self.arena["rim_y"]
+        charge_ratio = max(0.0, min(1.0, self.shot_charge / self.shot_charge_max))
+
+        # 完美区内瞄准篮筐中心；过早会投短，过晚会投长。
+        if self.shot_perfect_min <= charge_ratio <= self.shot_perfect_max:
+            horizontal_error = 0.0
+        elif charge_ratio < self.shot_perfect_min:
+            miss_ratio = (self.shot_perfect_min - charge_ratio) / max(
+                0.01, self.shot_perfect_min
+            )
+            horizontal_error = self.shot_error_scale * miss_ratio
+        else:
+            miss_ratio = (charge_ratio - self.shot_perfect_max) / max(
+                0.01, 1.0 - self.shot_perfect_max
+            )
+            horizontal_error = -self.shot_error_scale * miss_ratio
+
+        target_x = hoop_x + horizontal_error
+        target_y = hoop_y
+        shooter_x, shooter_y = self.center()
+        shot_distance = (
+            (shooter_x - hoop_x) ** 2 + (shooter_y - hoop_y) ** 2
+        ) ** 0.5
+
+        ball.shoot_towards(target_x, target_y, self, shot_distance)
+        self.is_charging_shot = False
+        self.shot_charge = 0.0
 
     def _apply_steal(self, want_steal, ball):
         if not want_steal or self.steal_cooldown_timer > 0:
@@ -346,7 +417,7 @@ class Player:
         self._apply_jump(keys[controls["jump"]])
         self._apply_ability(keys[controls["ability"]], opponent, ball)
         self._update_dash()
-        self._apply_shoot(keys[controls["action"]], ball)
+        self._handle_charge_shot(keys[controls["action"]], ball)
         self._apply_steal(keys[controls["steal"]], ball)
 
     def handle_ai(self, ball, opponent):
@@ -501,6 +572,8 @@ class Player:
         self.dash_timer = 0
         self.slam_effect_timer = 0
         self.double_jump_available = False
+        self.is_charging_shot = False
+        self.shot_charge = 0.0
         self.ai_shot_target = None
 
     def draw(self, screen, font):
@@ -550,5 +623,38 @@ class Player:
         ratio = max(0, min(1, ratio))
         pygame.draw.rect(screen, (90, 220, 90), (rect.x, rect.y - 10, bar_w * ratio, 4))
 
+        # 蓄力投篮条，仅在持球蓄力时显示。
+        if self.is_charging_shot:
+            meter_x = rect.centerx - SHOT_METER_WIDTH // 2
+            meter_y = rect.y - 19
+            pygame.draw.rect(
+                screen,
+                SHOT_METER_BG_COLOR,
+                (meter_x, meter_y, SHOT_METER_WIDTH, SHOT_METER_HEIGHT),
+                border_radius=3,
+            )
+
+            perfect_x = meter_x + int(SHOT_METER_WIDTH * self.shot_perfect_min)
+            perfect_w = max(
+                2,
+                int(SHOT_METER_WIDTH * (self.shot_perfect_max - self.shot_perfect_min)),
+            )
+            pygame.draw.rect(
+                screen,
+                SHOT_METER_PERFECT_COLOR,
+                (perfect_x, meter_y, perfect_w, SHOT_METER_HEIGHT),
+                border_radius=2,
+            )
+
+            charge_ratio = max(0.0, min(1.0, self.shot_charge / self.shot_charge_max))
+            marker_x = meter_x + int(SHOT_METER_WIDTH * charge_ratio)
+            pygame.draw.line(
+                screen,
+                SHOT_METER_COLOR,
+                (marker_x, meter_y - 2),
+                (marker_x, meter_y + SHOT_METER_HEIGHT + 2),
+                3,
+            )
+
         label = font.render(self.name, True, (255, 255, 255))
-        screen.blit(label, (rect.x, rect.y - 26))
+        screen.blit(label, (rect.x, rect.y - 30))

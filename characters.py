@@ -15,6 +15,10 @@ CHARACTERS = {
         "ability_cooldown": 180,
         "dash_speed": 17.0,
         "dash_duration": 11,
+        "shot_charge_speed": 1.0,
+        "shot_perfect_min": 0.42,
+        "shot_perfect_max": 0.68,
+        "shot_error_scale": 88,
         "sprite_folder": "djh",
     },
     "gorilla": {
@@ -32,6 +36,10 @@ CHARACTERS = {
         "slam_range": 115,
         "slam_horizontal_force": 13,
         "slam_vertical_force": -8,
+        "shot_charge_speed": 0.85,
+        "shot_perfect_min": 0.50,
+        "shot_perfect_max": 0.60,
+        "shot_error_scale": 118,
         "sprite_folder": "gorilla",
     },
     "ninja": {
@@ -47,6 +55,10 @@ CHARACTERS = {
         "ability_description": "Jump one more time in mid-air.",
         "ability_cooldown": 0,
         "double_jump_velocity": -13.5,
+        "shot_charge_speed": 1.25,
+        "shot_perfect_min": 0.44,
+        "shot_perfect_max": 0.62,
+        "shot_error_scale": 100,
         "sprite_folder": "ninja",
     },
 }
