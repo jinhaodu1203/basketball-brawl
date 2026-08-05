@@ -4,7 +4,7 @@ CHARACTERS = {
     "djh": {
         "id": "djh",
         "name": "DJH",
-        "description": "Balanced player with an explosive first step.",
+        "description": "Player with an explosive first step.",
         "color": (70, 130, 220),
         "move_speed": 5.3,
         "jump_velocity": -14.0,
@@ -24,7 +24,7 @@ CHARACTERS = {
     "gorilla": {
         "id": "gorilla",
         "name": "Gorilla",
-        "description": "Powerful, heavy and difficult to stop.",
+        "description": "Powerful and heavy.",
         "color": (125, 90, 75),
         "move_speed": 4.2,
         "jump_velocity": -12.5,

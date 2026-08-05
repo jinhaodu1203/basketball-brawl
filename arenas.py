@@ -102,52 +102,58 @@ def _load_background(arena, assets_dir):
 
 
 def draw_arena(screen, arena, assets_dir):
+    """绘制场景，并缓存静态画面以减少每帧重复绘制造成的卡顿。"""
+    cached = arena.get("_rendered_surface")
+    if cached is not None:
+        screen.blit(cached, (0, 0))
+        return
+
+    canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert()
+
     background = arena.get("_background")
     if "_background" not in arena:
         background = _load_background(arena, assets_dir)
         arena["_background"] = background
 
     if background is not None:
-        screen.blit(background, (0, 0))
+        canvas.blit(background, (0, 0))
     else:
-        _gradient(screen, arena["sky_top"], arena["sky_bottom"])
-        _draw_theme_details(screen, arena)
+        _gradient(canvas, arena["sky_top"], arena["sky_bottom"])
+        _draw_theme_details(canvas, arena)
 
     ground_y = arena["ground_y"]
-    pygame.draw.rect(screen, arena["ground_color"], (0, ground_y, SCREEN_WIDTH, SCREEN_HEIGHT-ground_y))
-    pygame.draw.rect(screen, arena["court_color"], (0, ground_y-54, SCREEN_WIDTH, 54))
+    pygame.draw.rect(canvas, arena["ground_color"], (0, ground_y, SCREEN_WIDTH, SCREEN_HEIGHT-ground_y))
+    pygame.draw.rect(canvas, arena["court_color"], (0, ground_y-54, SCREEN_WIDTH, 54))
 
-    # 侧视角不再画压扁圆弧。三分线用明确的地板竖线表示出手边界。
     three_x = arena["rim_x"] + arena["three_point_distance"]
-    pygame.draw.line(screen, arena["line_color"], (three_x, ground_y-54), (three_x, ground_y), 5)
-    pygame.draw.line(screen, arena["line_color"], (0, ground_y-54), (SCREEN_WIDTH, ground_y-54), 2)
+    pygame.draw.line(canvas, arena["line_color"], (three_x, ground_y-54), (three_x, ground_y), 5)
+    pygame.draw.line(canvas, arena["line_color"], (0, ground_y-54), (SCREEN_WIDTH, ground_y-54), 2)
 
-    # 罚球区视觉块
-    pygame.draw.rect(screen, arena["accent_color"], (0, ground_y-54, 155, 54), 3)
-    pygame.draw.line(screen, arena["line_color"], (155, ground_y-54), (155, ground_y), 3)
+    pygame.draw.rect(canvas, arena["accent_color"], (0, ground_y-54, 155, 54), 3)
+    pygame.draw.line(canvas, arena["line_color"], (155, ground_y-54), (155, ground_y), 3)
 
-    # 篮板与篮筐
     bx, rx, ry = arena["backboard_x"], arena["rim_x"], arena["rim_y"]
-    pygame.draw.line(screen, (238,238,245), (bx, ry-62), (bx, ry+28), 6)
-    pygame.draw.line(screen, (238,238,245), (bx, ry), (rx, ry), 4)
+    pygame.draw.line(canvas, (238,238,245), (bx, ry-62), (bx, ry+28), 6)
+    pygame.draw.line(canvas, (238,238,245), (bx, ry), (rx, ry), 4)
     hoop_x = rx-arena["hoop_width"]//2
     hoop_y = ry-arena["hoop_height"]//2
-    pygame.draw.rect(screen, arena["accent_color"], (hoop_x, hoop_y, arena["hoop_width"], arena["hoop_height"]), 3)
+    pygame.draw.rect(canvas, arena["accent_color"], (hoop_x, hoop_y, arena["hoop_width"], arena["hoop_height"]), 3)
 
-    # 简单篮网：只负责视觉，不参与碰撞。
     net_top_y = ry + arena["hoop_height"] // 2
     net_bottom_y = net_top_y + 34
     net_left = hoop_x + 6
     net_right = hoop_x + arena["hoop_width"] - 6
-    pygame.draw.line(screen, (225, 225, 235), (net_left, net_top_y), (net_left + 7, net_bottom_y), 2)
-    pygame.draw.line(screen, (225, 225, 235), (net_right, net_top_y), (net_right - 7, net_bottom_y), 2)
-    pygame.draw.line(screen, (225, 225, 235), (net_left + 7, net_bottom_y), (net_right - 7, net_bottom_y), 2)
-    pygame.draw.line(screen, (225, 225, 235), (rx, net_top_y), (rx, net_bottom_y), 1)
+    pygame.draw.line(canvas, (225, 225, 235), (net_left, net_top_y), (net_left + 7, net_bottom_y), 2)
+    pygame.draw.line(canvas, (225, 225, 235), (net_right, net_top_y), (net_right - 7, net_bottom_y), 2)
+    pygame.draw.line(canvas, (225, 225, 235), (net_left + 7, net_bottom_y), (net_right - 7, net_bottom_y), 2)
+    pygame.draw.line(canvas, (225, 225, 235), (rx, net_top_y), (rx, net_bottom_y), 1)
 
     label_font = pygame.font.SysFont(None, 18)
     label = label_font.render("3PT", True, arena["line_color"])
-    screen.blit(label, (three_x-label.get_width()//2, ground_y-78))
+    canvas.blit(label, (three_x-label.get_width()//2, ground_y-78))
 
+    arena["_rendered_surface"] = canvas
+    screen.blit(canvas, (0, 0))
 
 def _draw_theme_details(screen, arena):
     if arena["id"] == "street":
