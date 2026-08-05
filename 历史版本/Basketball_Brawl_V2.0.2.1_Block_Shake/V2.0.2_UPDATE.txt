@@ -1,0 +1,9 @@
+Basketball Brawl V2.0.2 - Block System
+
+替换整个项目中的同名文件即可。
+重点修改：player.py, ai.py, game.py, constants.py, feedback.py
+ball.py 保留 V2.0.1 运球系统。
+
+操作：正常按跳跃键起跳，靠近对手飞行中的投篮球即可自动盖帽。
+P1 跳跃：W
+P2 跳跃：方向键上
