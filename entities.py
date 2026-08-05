@@ -9,6 +9,8 @@ from constants import (
     POSSESSION_COOLDOWN_FRAMES, STEAL_COOLDOWN_FRAMES,
     DASH_SPEED, DASH_DURATION_FRAMES, DASH_COOLDOWN_FRAMES,
     BALL_RADIUS, BALL_BOUNCE_DAMPING, SCREEN_WIDTH,
+    RIM_COLLISION_RADIUS, RIM_BOUNCE_DAMPING,
+    BACKBOARD_BOUNCE_DAMPING, BACKBOARD_THICKNESS,
     HOOP_X, HOOP_Y, HOOP_WIDTH, HOOP_HEIGHT, SHOT_FLIGHT_FRAMES,
     COLOR_BALL, COLOR_DASH_TRAIL,
     ANIMATION_SPEED, DEFAULT_FRAME_COUNTS, BALL_SPAWN_X,
@@ -30,6 +32,8 @@ class Ball:
         self.y = y
         self.vx = 0.0
         self.vy = 0.0
+        self.previous_x = x
+        self.previous_y = y
         self.radius = BALL_RADIUS
         self.state = "loose"
         self.holder = None
@@ -66,16 +70,85 @@ class Ball:
         self.vx = (target_x - self.x) / frames
         self.vy = (target_y - self.y - 0.5 * GRAVITY * frames ** 2) / frames
 
+    def _resolve_circle_collision(self, collider_x, collider_y, collider_radius):
+        """让篮球与圆形篮筐边缘发生反弹。"""
+        dx = self.x - collider_x
+        dy = self.y - collider_y
+        distance_sq = dx * dx + dy * dy
+        minimum_distance = self.radius + collider_radius
+
+        if distance_sq >= minimum_distance * minimum_distance:
+            return
+
+        distance = max(0.001, distance_sq ** 0.5)
+        normal_x = dx / distance
+        normal_y = dy / distance
+
+        # 把篮球推出碰撞体，防止连续卡住。
+        overlap = minimum_distance - distance
+        self.x += normal_x * overlap
+        self.y += normal_y * overlap
+
+        velocity_along_normal = self.vx * normal_x + self.vy * normal_y
+        if velocity_along_normal >= 0:
+            return
+
+        impulse = -(1 + RIM_BOUNCE_DAMPING) * velocity_along_normal
+        self.vx += impulse * normal_x
+        self.vy += impulse * normal_y
+
+    def _handle_hoop_collisions(self):
+        """处理篮板和篮圈两端的物理碰撞。"""
+        rim_x = self.arena["rim_x"]
+        rim_y = self.arena["rim_y"]
+        hoop_half_width = self.arena["hoop_width"] / 2
+
+        # 篮板是一条竖直的薄墙。
+        backboard_x = self.arena.get("backboard_x", rim_x - 48)
+        board_top = rim_y - 62
+        board_bottom = rim_y + 28
+        touching_board_height = (
+            self.y + self.radius >= board_top
+            and self.y - self.radius <= board_bottom
+        )
+        crossed_board = (
+            self.x - self.radius <= backboard_x + BACKBOARD_THICKNESS / 2
+            and self.previous_x - self.radius > backboard_x + BACKBOARD_THICKNESS / 2
+        )
+        if touching_board_height and crossed_board and self.vx < 0:
+            self.x = backboard_x + BACKBOARD_THICKNESS / 2 + self.radius
+            self.vx = abs(self.vx) * BACKBOARD_BOUNCE_DAMPING
+
+        # 篮圈左右两端视为两个小圆形碰撞体。
+        self._resolve_circle_collision(
+            rim_x - hoop_half_width,
+            rim_y,
+            RIM_COLLISION_RADIUS,
+        )
+        self._resolve_circle_collision(
+            rim_x + hoop_half_width,
+            rim_y,
+            RIM_COLLISION_RADIUS,
+        )
+
     def update(self):
+        self.previous_x = self.x
+        self.previous_y = self.y
+
         if self.state == "held" and self.holder is not None:
             offset = 26 if self.holder.facing_right else -26
             self.x = self.holder.x + PLAYER_WIDTH / 2 + offset
             self.y = self.holder.y + PLAYER_HEIGHT * 0.4
+            self.previous_x = self.x
+            self.previous_y = self.y
             return
 
         self.vy += GRAVITY
         self.x += self.vx
         self.y += self.vy
+
+        if self.state == "flying":
+            self._handle_hoop_collisions()
 
         if self.x - self.radius < 0:
             self.x = self.radius
@@ -92,15 +165,20 @@ class Ball:
                 self.state = "loose"
 
     def check_score(self):
+        """篮球从篮圈上方向下穿过时得分，避免高速球漏判。"""
         if self.state != "flying" or self.vy <= 0:
             return None, 0
 
-        hoop_rect = pygame.Rect(
-            self.arena["rim_x"] - self.arena["hoop_width"] / 2,
-            self.arena["rim_y"] - self.arena["hoop_height"] / 2,
-            self.arena["hoop_width"], self.arena["hoop_height"]
+        rim_x = self.arena["rim_x"]
+        rim_y = self.arena["rim_y"]
+        scoring_half_width = max(
+            4,
+            self.arena["hoop_width"] / 2 - self.radius * 0.35,
         )
-        if not hoop_rect.collidepoint(self.x, self.y):
+
+        crossed_rim_height = self.previous_y < rim_y <= self.y
+        inside_rim = abs(self.x - rim_x) <= scoring_half_width
+        if not (crossed_rim_height and inside_rim):
             return None, 0
 
         scorer = self.last_shooter
@@ -114,6 +192,8 @@ class Ball:
         self.vy = 0
         self.x = self.arena["ball_spawn_x"]
         self.y = self.arena["ground_y"] - 200
+        self.previous_x = self.x
+        self.previous_y = self.y
         self.holder = None
         return scorer, points
 

@@ -134,6 +134,16 @@ def draw_arena(screen, arena, assets_dir):
     hoop_y = ry-arena["hoop_height"]//2
     pygame.draw.rect(screen, arena["accent_color"], (hoop_x, hoop_y, arena["hoop_width"], arena["hoop_height"]), 3)
 
+    # 简单篮网：只负责视觉，不参与碰撞。
+    net_top_y = ry + arena["hoop_height"] // 2
+    net_bottom_y = net_top_y + 34
+    net_left = hoop_x + 6
+    net_right = hoop_x + arena["hoop_width"] - 6
+    pygame.draw.line(screen, (225, 225, 235), (net_left, net_top_y), (net_left + 7, net_bottom_y), 2)
+    pygame.draw.line(screen, (225, 225, 235), (net_right, net_top_y), (net_right - 7, net_bottom_y), 2)
+    pygame.draw.line(screen, (225, 225, 235), (net_left + 7, net_bottom_y), (net_right - 7, net_bottom_y), 2)
+    pygame.draw.line(screen, (225, 225, 235), (rx, net_top_y), (rx, net_bottom_y), 1)
+
     label_font = pygame.font.SysFont(None, 18)
     label = label_font.render("3PT", True, arena["line_color"])
     screen.blit(label, (three_x-label.get_width()//2, ground_y-78))
