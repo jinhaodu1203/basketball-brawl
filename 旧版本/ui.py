@@ -105,149 +105,157 @@ def _smoothstep(value):
     return value * value * (3.0 - 2.0 * value)
 
 
-def _draw_character_carousel(screen, font, small_font, elapsed):
-    """Draw the three-character main-menu carousel without black rectangles.
-
-    No Surface.set_alpha(), no full-surface opacity modulation, and no
-    temporary black backing surfaces are used.
+def _draw_character_carousel(screen, characters, elapsed_ms):
     """
-    character_order = ["ninja", "djh", "gorilla"]
-    portrait_sizes = {
-        "ninja": (198, 280),
-        "djh": (200, 282),
-        "gorilla": (210, 294),
-    }
-    portraits = {
-        cid: _load_ui_image(
-            f"characters/{cid}/portrait.png",
-            portrait_sizes[cid],
-        )
-        for cid in character_order
-    }
+    主菜单人物轮盘：左后方 -> 中间前景 -> 右后方。
 
-    # Left rear, center front, right rear.
+    每隔一段时间轮换一次，中间人物最大、最亮并绘制在最上层，
+    另外两个人物缩小、变暗，形成类似角色选秀轮盘的纵深效果。
+    """
+    if not characters:
+        return
+
+    # 每个停留阶段 1.55 秒，其中最后 0.48 秒进行滑动切换。
+    hold_ms = 1070
+    move_ms = 480
+    cycle_ms = hold_ms + move_ms
+    phase_index = elapsed_ms // cycle_ms
+    phase_time = elapsed_ms % cycle_ms
+
+    if phase_time < hold_ms:
+        transition = 0.0
+    else:
+        transition = _smoothstep((phase_time - hold_ms) / move_ms)
+
+    # 槽位顺序：左后方、中间前景、右后方。
     slots = [
-        {"center": (124, 365), "scale": 0.60, "depth": 0},
-        {"center": (275, 345), "scale": 0.86, "depth": 1},
-        {"center": (426, 365), "scale": 0.60, "depth": 0},
+        {"center": (122, 338), "scale": 0.80, "alpha": 255, "y_offset": 6},
+        {"center": (275, 312), "scale": 1.22, "alpha": 255, "y_offset": 0},
+        {"center": (428, 338), "scale": 0.80, "alpha": 255, "y_offset": 6},
     ]
 
-    cycle_seconds = 3.0
-    transition_seconds = 0.72
-    phase = (elapsed / cycle_seconds) % len(character_order)
-    current_index = int(phase)
-    local_phase = phase - current_index
-    transition = _smoothstep(
-        min(1.0, local_phase / max(0.001, transition_seconds / cycle_seconds))
-    )
-
+    # 角色按 Ninja -> DJH -> Gorilla 的顺序从左向右通过中央。
+    count = len(characters)
     draw_items = []
-    for original_index, cid in enumerate(character_order):
-        current_slot = (original_index - current_index) % len(character_order)
-        next_slot = (current_slot - 1) % len(character_order)
-
-        a = slots[current_slot]
-        b = slots[next_slot]
-        cx = _lerp(a["center"][0], b["center"][0], transition)
-        cy = _lerp(a["center"][1], b["center"][1], transition)
-        scale = _lerp(a["scale"], b["scale"], transition)
-        depth = _lerp(a["depth"], b["depth"], transition)
-
-        draw_items.append((depth, cid, cx, cy, scale))
-
-    # Rear characters first, center character last.
-    draw_items.sort(key=lambda item: item[0])
-
-    for _, cid, cx, cy, scale in draw_items:
-        portrait = portraits.get(cid)
-        if portrait is None:
+    for character_index, (name, image) in enumerate(characters):
+        if image is None:
             continue
 
-        width = max(1, int(portrait.get_width() * scale))
-        height = max(1, int(portrait.get_height() * scale))
-        transformed = pygame.transform.scale(portrait, (width, height))
+        current_slot = (character_index + phase_index) % count
+        next_slot = (current_slot + 1) % count
+        current = slots[current_slot]
+        target = slots[next_slot]
 
-        rect = transformed.get_rect(midbottom=(int(cx), int(cy + 120)))
-        screen.blit(transformed, rect)
+        # 右侧人物回到左侧时从屏幕边缘绕回，避免横穿中央。
+        if current_slot == 2 and next_slot == 0:
+            if transition < 0.5:
+                local_t = transition * 2.0
+                center_x = _lerp(current["center"][0], 520, local_t)
+                center_y = _lerp(current["center"][1], 350, local_t)
+                scale = _lerp(current["scale"], 0.55, local_t)
+                alpha = 255
+            else:
+                local_t = (transition - 0.5) * 2.0
+                center_x = _lerp(30, target["center"][0], local_t)
+                center_y = _lerp(350, target["center"][1], local_t)
+                scale = _lerp(0.55, target["scale"], local_t)
+                alpha = 255
+        else:
+            center_x = _lerp(current["center"][0], target["center"][0], transition)
+            center_y = _lerp(current["center"][1], target["center"][1], transition)
+            scale = _lerp(current["scale"], target["scale"], transition)
+            alpha = 255
 
-    # Baseline and center-character name.
-    pygame.draw.line(screen, (255, 132, 55), (62, 490), (480, 490), 3)
+        transformed = pygame.transform.scale(
+            image,
+            (
+                max(1, int(image.get_width() * scale)),
+                max(1, int(image.get_height() * scale)),
+            ),
+        )
+        # 主页面人物保持逐像素透明，不再对整张 Surface 做透明度乘法。
+        # 后排人物只通过缩放和位置制造层次，避免透明区域变成黑色方框。
 
-    center_character = character_order[current_index]
-    name_surface = small_font.render(
-        tr(f"characters.{center_character}.name"),
-        True,
-        COLOR_TEXT,
-    )
-    plate = pygame.Rect(202, 456, 146, 28)
-    pygame.draw.rect(screen, (8, 14, 28), plate, border_radius=8)
-    pygame.draw.rect(screen, (255, 132, 55), plate, 2, border_radius=8)
-    screen.blit(name_surface, name_surface.get_rect(center=plate.center))
+        # 越接近中央越后绘制，确保中央角色盖在另外两个角色前面。
+        depth = scale
+        draw_items.append((depth, name, transformed, (int(center_x), int(center_y))))
 
-def _crop_transparent_padding(image, alpha_threshold=8, padding=2):
-    """Crop fully transparent padding around a portrait.
+    draw_items.sort(key=lambda item: item[0])
+    for _, name, transformed, center in draw_items:
+        # 后排角色加轻微暗色遮罩，中央人物保持正常亮度。
+        screen.blit(transformed, transformed.get_rect(center=center))
 
-    Uses only Surface.get_bounding_rect(), which is reliable across the
-    macOS/Pygame versions used by this project.
+    # 中央角色姓名牌随轮盘同步切换。
+    center_character_index = (1 - phase_index) % count
+    if transition >= 0.5:
+        center_character_index = (center_character_index - 1) % count
+    center_name = characters[center_character_index][0]
+
+    plate = pygame.Rect(202, 426, 146, 28)
+    panel = pygame.Surface(plate.size, pygame.SRCALPHA)
+    pygame.draw.rect(panel, (7, 12, 25, 205), panel.get_rect(), border_radius=8)
+    pygame.draw.rect(panel, (255, 132, 55, 225), panel.get_rect(), 2, border_radius=8)
+    screen.blit(panel, plate)
+    return center_name
+
+
+def _crop_transparent_padding(image, alpha_threshold=12, padding=3):
+    """Crop empty transparent padding around a portrait.
+
+    This makes the visible character occupy more of the same UI rectangle,
+    so the dark/empty box behind the carousel appears smaller without
+    changing the rest of the main-menu layout.
     """
     surface = image.convert_alpha()
-    rect = surface.get_bounding_rect(min_alpha=alpha_threshold)
-    if rect.width <= 0 or rect.height <= 0:
+    width, height = surface.get_size()
+
+    min_x, min_y = width, height
+    max_x, max_y = -1, -1
+
+    for y in range(height):
+        for x in range(width):
+            if surface.get_at((x, y)).a > alpha_threshold:
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+
+    if max_x < min_x or max_y < min_y:
         return surface
 
-    rect.inflate_ip(padding * 2, padding * 2)
-    rect.clamp_ip(surface.get_rect())
+    min_x = max(0, min_x - padding)
+    min_y = max(0, min_y - padding)
+    max_x = min(width - 1, max_x + padding)
+    max_y = min(height - 1, max_y + padding)
+
+    rect = pygame.Rect(
+        min_x,
+        min_y,
+        max_x - min_x + 1,
+        max_y - min_y + 1,
+    )
     return surface.subsurface(rect).copy().convert_alpha()
 
 def _load_ui_image(relative_path, size=None):
-    """Load a UI image with reliable per-pixel transparency.
-
-    Character portraits:
-    - convert_alpha()
-    - remove only dark background connected to the image edge
-    - crop transparent padding
-    - nearest-neighbour scale
-
-    Other UI and arena images:
-    - convert_alpha()
-    - smoothscale
-    """
-    cache_key = (relative_path, size)
-    cached = _IMAGE_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-
-    path = os.path.join(ASSET_ROOT, relative_path)
-    if not os.path.isfile(path):
-        return None
-
+    key = (relative_path, size)
+    if key in _IMAGE_CACHE:
+        return _IMAGE_CACHE[key]
+    path = os.path.join(ASSET_ROOT, *relative_path.split("/"))
     try:
         image = pygame.image.load(path).convert_alpha()
-
-        is_character = (
-            relative_path.startswith("characters/")
-            and relative_path.endswith("portrait.png")
-        )
-
-        if is_character:
+        if relative_path.startswith("characters/") and relative_path.endswith("portrait.png"):
             image = _remove_connected_dark_background(image)
             image = _crop_transparent_padding(image)
-
         if size:
-            if is_character:
+            if relative_path.startswith("characters/"):
                 image = pygame.transform.scale(image, size)
             else:
                 image = pygame.transform.smoothscale(image, size)
+    except (pygame.error, FileNotFoundError):
+        image = None
+    _IMAGE_CACHE[key] = image
+    return image
 
-        # Normalize alpha surface so blitting never falls back to colorkey/global alpha.
-        normalized = pygame.Surface(image.get_size(), pygame.SRCALPHA, 32)
-        normalized.blit(image, (0, 0))
-        normalized = normalized.convert_alpha()
-
-        _IMAGE_CACHE[cache_key] = normalized
-        return normalized
-    except (pygame.error, OSError, ValueError):
-        return None
 
 def _draw_backdrop(screen, accent=(255, 116, 54)):
     key = tuple(accent)
@@ -366,13 +374,24 @@ def main_menu(screen, font, small_font, title_font):
         screen.blit(title, title.get_rect(midleft=(62, 118)))
         screen.blit(subtitle, subtitle.get_rect(midleft=(65, 157)))
 
-        elapsed = (pygame.time.get_ticks() - entrance_started_at) / 1000.0
-        _draw_character_carousel(
+        gorilla = _load_ui_image("characters/gorilla/portrait.png", (310, 430))
+        djh = _load_ui_image("characters/djh/portrait.png", (294, 418))
+        ninja = _load_ui_image("characters/ninja/portrait.png", (292, 414))
+
+        elapsed = pygame.time.get_ticks() - entrance_started_at
+        center_name = _draw_character_carousel(
             screen,
-            font,
-            small_font,
+            [
+                (tr("characters.ninja.name"), ninja),
+                (tr("characters.djh.name"), djh),
+                (tr("characters.gorilla.name"), gorilla),
+            ],
             elapsed,
         )
+        pygame.draw.line(screen, (255, 132, 55), (62, 460), (480, 460), 3)
+        if center_name:
+            roster = small_font.render(center_name, True, (245, 248, 255))
+            screen.blit(roster, roster.get_rect(center=(275, 440)))
 
         menu_title = small_font.render("SELECT MODE", True, (132, 154, 190))
         screen.blit(menu_title, (595, 140))
@@ -734,7 +753,7 @@ def select_character(screen, font, small_font, title_font, player_label):
 
             preview = _load_ui_image(
                 f"characters/{character_id}/portrait.png",
-                (132, 176),
+                (184, 252),
             )
             if preview:
                 screen.blit(

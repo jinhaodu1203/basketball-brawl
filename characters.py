@@ -20,6 +20,9 @@ CHARACTERS = {
         "shot_perfect_max": 0.68,
         "shot_error_scale": 88,
         "sprite_folder": "djh",
+        "frame_counts": {'idle': 6, 'run': 8, 'jump': 10, 'walk': 8, 'attack_1': 4, 'attack_2': 3, 'attack_3': 4, 'hurt': 3, 'shield': 2},
+        "render_height": 132,
+        "ui_accent": (53, 156, 255),
     },
     "gorilla": {
         "id": "gorilla",
@@ -41,6 +44,9 @@ CHARACTERS = {
         "shot_perfect_max": 0.60,
         "shot_error_scale": 118,
         "sprite_folder": "gorilla",
+        "frame_counts": {'idle': 6, 'run': 8, 'jump': 12, 'walk': 8, 'attack_1': 6, 'attack_2': 4, 'attack_3': 3, 'hurt': 2, 'shield': 2},
+        "render_height": 140,
+        "ui_accent": (255, 128, 55),
     },
     "ninja": {
         "id": "ninja",
@@ -60,6 +66,9 @@ CHARACTERS = {
         "shot_perfect_max": 0.62,
         "shot_error_scale": 100,
         "sprite_folder": "ninja",
+        "frame_counts": {'idle': 6, 'run': 8, 'jump': 12, 'walk': 8, 'attack_1': 5, 'attack_2': 3, 'attack_3': 4, 'hurt': 2, 'shield': 4},
+        "render_height": 136,
+        "ui_accent": (167, 92, 255),
     },
 }
 

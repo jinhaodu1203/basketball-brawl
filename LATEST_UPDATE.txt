@@ -1,23 +1,34 @@
 Basketball Brawl
-Steam-ready Step 3 — Bilingual Localization
+Full Game Rollback Build
 
-NEW
----
-- Added instant English / Simplified Chinese switching in Settings.
-- Added JSON language files: lang/en.json and lang/zh.json.
-- Added persistent language saving in settings.json.
-- Added system-font fallback for Chinese text.
+THIS PACKAGE INCLUDES
+--------
+- Complete Python source code
+- AI mode
+- Local two-player mode
+- Training Camp
+- Chinese / English localization
+- Mouse and keyboard menu controls
+- Q / ESC back navigation
+- Character selection
+- Arena selection
+- AI difficulty selection
+- Animated Fighter / Samurai / Shinobi models
+- DJH Dash
+- Gorilla Ground Slam
+- Ninja Double Jump
+- Dunk, block, rebound and scoring systems
+- Three court backgrounds
+- Basketball hoop artwork
+- Fullscreen support
 
-LOCALIZED
----
-- Main menu
-- Settings
-- How To Play
-- Credits
-- Match mode, character, arena and difficulty selection
-- Loading screen
-- Pause menu
-- Win / loss screen
-- Character names, abilities and descriptions
-- Arena names and descriptions
-- Gameplay feedback such as DUNK, BLOCK and REBOUND
+ROLLBACK
+--------
+- Restored the stable main-menu carousel code from before the later
+  transparent-background experiments.
+- Character portrait backgrounds may remain black in this rollback build.
+- No experimental portrait-removal code is included.
+
+RUN
+--------
+python main.py

@@ -5,7 +5,7 @@ import math
 import random
 import pygame
 
-from localization import tr
+from localization import create_font, tr
 
 from constants import (
     SCREEN_WIDTH,
@@ -41,7 +41,9 @@ EVENT_STYLE = {
         "shake": SCREEN_SHAKE_DASH,
         "shake_frames": 3,
         "freeze": HIT_STOP_DASH_FRAMES,
-        "flash": (220, 240, 255),
+        # DJH 使用 Dash 时保留震屏、顿帧、文字和粒子，
+        # 但不再触发覆盖全屏的白色闪光。
+        "flash": None,
         "particle_count": 8,
     },
     "slam": {
@@ -199,7 +201,7 @@ class FeedbackManager:
             progress = message["timer"] / max(1, duration)
             font_size = message.get("font_size")
             render_font = (
-                pygame.font.SysFont(None, font_size, bold=True)
+                create_font(font_size, bold=True)
                 if font_size
                 else title_font
             )

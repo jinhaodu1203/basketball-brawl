@@ -20,10 +20,11 @@ ARENAS = {
         "court_color": (93, 82, 92),
         "line_color": (245, 225, 190),
         "accent_color": (255, 190, 90),
+        "flip_background_x": True,
         "ground_y": 480,
         "backboard_x": 28,
         "rim_x": 76,
-        "rim_y": 270,
+        "rim_y": 325,
         "hoop_width": 46,
         "hoop_height": 14,
         "three_point_distance": 340,
@@ -41,10 +42,11 @@ ARENAS = {
         "court_color": (82, 66, 78),
         "line_color": (120, 235, 255),
         "accent_color": (255, 95, 185),
+        "flip_background_x": True,
         "ground_y": 470,
         "backboard_x": 34,
         "rim_x": 84,
-        "rim_y": 255,
+        "rim_y": 320,
         "hoop_width": 48,
         "hoop_height": 14,
         "three_point_distance": 355,
@@ -62,10 +64,11 @@ ARENAS = {
         "court_color": (72, 78, 88),
         "line_color": (220, 235, 255),
         "accent_color": (145, 185, 255),
+        "flip_background_x": True,
         "ground_y": 475,
         "backboard_x": 30,
         "rim_x": 78,
-        "rim_y": 265,
+        "rim_y": 323,
         "hoop_width": 46,
         "hoop_height": 14,
         "three_point_distance": 345,
@@ -96,9 +99,23 @@ def _load_background(arena, assets_dir):
         return None
     try:
         image = pygame.image.load(path).convert()
+        if arena.get("flip_background_x", False):
+            image = pygame.transform.flip(image, True, False)
         return pygame.transform.smoothscale(image, (SCREEN_WIDTH, SCREEN_HEIGHT))
     except pygame.error:
         return None
+
+
+def _load_hoop(arena, assets_dir):
+    if "_hoop" in arena:
+        return arena["_hoop"]
+    path = os.path.join(assets_dir, "props", "hoop.png")
+    try:
+        image = pygame.image.load(path).convert_alpha() if os.path.exists(path) else None
+    except pygame.error:
+        image = None
+    arena["_hoop"] = image
+    return image
 
 
 def draw_arena(screen, arena, assets_dir):
@@ -122,35 +139,39 @@ def draw_arena(screen, arena, assets_dir):
         _draw_theme_details(canvas, arena)
 
     ground_y = arena["ground_y"]
-    pygame.draw.rect(canvas, arena["ground_color"], (0, ground_y, SCREEN_WIDTH, SCREEN_HEIGHT-ground_y))
-    pygame.draw.rect(canvas, arena["court_color"], (0, ground_y-54, SCREEN_WIDTH, 54))
-
     three_x = arena["rim_x"] + arena["three_point_distance"]
-    pygame.draw.line(canvas, arena["line_color"], (three_x, ground_y-54), (three_x, ground_y), 5)
-    pygame.draw.line(canvas, arena["line_color"], (0, ground_y-54), (SCREEN_WIDTH, ground_y-54), 2)
 
-    pygame.draw.rect(canvas, arena["accent_color"], (0, ground_y-54, 155, 54), 3)
-    pygame.draw.line(canvas, arena["line_color"], (155, ground_y-54), (155, ground_y), 3)
+    guide = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    pygame.draw.line(guide, (*arena["line_color"], 115), (0, ground_y), (SCREEN_WIDTH, ground_y), 2)
+    pygame.draw.line(guide, (*arena["accent_color"], 205), (three_x, ground_y - 19), (three_x, ground_y + 2), 4)
+    pygame.draw.circle(guide, (*arena["accent_color"], 80), (three_x, ground_y - 8), 13, 2)
+    canvas.blit(guide, (0, 0))
 
     bx, rx, ry = arena["backboard_x"], arena["rim_x"], arena["rim_y"]
-    pygame.draw.line(canvas, (238,238,245), (bx, ry-62), (bx, ry+28), 6)
-    pygame.draw.line(canvas, (238,238,245), (bx, ry), (rx, ry), 4)
-    hoop_x = rx-arena["hoop_width"]//2
-    hoop_y = ry-arena["hoop_height"]//2
-    pygame.draw.rect(canvas, arena["accent_color"], (hoop_x, hoop_y, arena["hoop_width"], arena["hoop_height"]), 3)
+    hoop_asset = _load_hoop(arena, assets_dir)
+    if hoop_asset is not None:
+        hoop_h = 310
+        hoop_w = int(hoop_asset.get_width() * hoop_h / hoop_asset.get_height())
+        hoop = pygame.transform.scale(hoop_asset, (hoop_w, hoop_h))
+        hoop_pos = (int(rx - hoop_w * 0.82), int(ry - hoop_h * 0.358))
+        canvas.blit(hoop, hoop_pos)
+    else:
+        pygame.draw.line(canvas, (238, 238, 245), (bx, ry - 62), (bx, ry + 28), 6)
+        pygame.draw.line(canvas, (238, 238, 245), (bx, ry), (rx, ry), 4)
+        pygame.draw.rect(
+            canvas,
+            arena["accent_color"],
+            (rx - arena["hoop_width"] // 2, ry - arena["hoop_height"] // 2,
+             arena["hoop_width"], arena["hoop_height"]),
+            3,
+        )
 
-    net_top_y = ry + arena["hoop_height"] // 2
-    net_bottom_y = net_top_y + 34
-    net_left = hoop_x + 6
-    net_right = hoop_x + arena["hoop_width"] - 6
-    pygame.draw.line(canvas, (225, 225, 235), (net_left, net_top_y), (net_left + 7, net_bottom_y), 2)
-    pygame.draw.line(canvas, (225, 225, 235), (net_right, net_top_y), (net_right - 7, net_bottom_y), 2)
-    pygame.draw.line(canvas, (225, 225, 235), (net_left + 7, net_bottom_y), (net_right - 7, net_bottom_y), 2)
-    pygame.draw.line(canvas, (225, 225, 235), (rx, net_top_y), (rx, net_bottom_y), 1)
-
-    label_font = pygame.font.SysFont(None, 18)
+    label_font = pygame.font.SysFont("arial", 15, bold=True)
     label = label_font.render("3PT", True, arena["line_color"])
-    canvas.blit(label, (three_x-label.get_width()//2, ground_y-78))
+    badge = pygame.Surface((label.get_width() + 12, label.get_height() + 5), pygame.SRCALPHA)
+    pygame.draw.rect(badge, (5, 10, 22, 165), badge.get_rect(), border_radius=7)
+    badge.blit(label, (6, 2))
+    canvas.blit(badge, badge.get_rect(midbottom=(three_x, ground_y - 24)))
 
     arena["_rendered_surface"] = canvas
     screen.blit(canvas, (0, 0))

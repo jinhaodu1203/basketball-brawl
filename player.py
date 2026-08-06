@@ -6,7 +6,7 @@ import random
 
 from constants import (
     GRAVITY, JUMP_VELOCITY, MOVE_SPEED, GROUND_Y,
-    PLAYER_WIDTH, PLAYER_HEIGHT, STEAL_RANGE,
+    PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_RENDER_HEIGHT, STEAL_RANGE,
     POSSESSION_COOLDOWN_FRAMES, STEAL_COOLDOWN_FRAMES,
     DASH_SPEED, DASH_DURATION_FRAMES, DASH_COOLDOWN_FRAMES,
     SCREEN_WIDTH,
@@ -126,6 +126,8 @@ class Player:
 
         self.ai_controlled = ai_controlled
         self.ai_shot_target = None
+        self.anim_action_state = None
+        self.anim_action_timer = 0
         self.ai_state = "seek_ball"
         self.ai_state_timer = 0
         self.ai_offense_timer = 0
@@ -137,11 +139,18 @@ class Player:
         self.ai_ability_trigger_chance = normal_preset["dash_trigger_chance"]
         self.ai_three_point_shot_chance = normal_preset["three_point_shot_chance"]
 
-        self.frame_counts = frame_counts or DEFAULT_FRAME_COUNTS
+        self.frame_counts = (
+            frame_counts
+            or self.character_config.get("frame_counts")
+            or DEFAULT_FRAME_COUNTS
+        )
         self.animations = load_character_animations(sprite_folder, self.frame_counts)
         self.anim_state = "idle"
         self.anim_frame_index = 0
         self.anim_timer = 0
+        self.anim_action_state = None
+        self.anim_action_timer = 0
+        self._render_cache = {}
 
     def rect(self):
         return pygame.Rect(int(self.x), int(self.y), PLAYER_WIDTH, PLAYER_HEIGHT)
@@ -302,6 +311,7 @@ class Player:
         self.ability_cooldown_timer = self.ability_cooldown_max
         dash_x, dash_y = self.center()
         self.events.append(("dash", dash_x, dash_y))
+        self.play_action_animation("attack_1", 16)
 
     def _update_dash(self):
         if not self.is_dashing:
@@ -314,7 +324,14 @@ class Player:
             self.dash_hit_registered = False
 
     def _use_ground_slam(self, opponent, ball):
-        if self.ability_cooldown_timer > 0 or opponent is None:
+        """Gorilla Ground Slam.
+
+        The skill always plays its animation/effect when off cooldown.
+        In training camp there may be no opponent, so the visual skill still
+        works; knockback and forced ball drop are applied only when a nearby
+        opponent exists.
+        """
+        if self.ability_cooldown_timer > 0:
             return
 
         self.ability_cooldown_timer = self.ability_cooldown_max
@@ -322,6 +339,10 @@ class Player:
 
         my_x, my_y = self.center()
         self.events.append(("slam", my_x, self.arena["ground_y"] - 6))
+        self.play_action_animation("attack_3", 22)
+
+        if opponent is None:
+            return
 
         opponent_x, opponent_y = opponent.center()
         distance = ((opponent_x - my_x) ** 2 + (opponent_y - my_y) ** 2) ** 0.5
@@ -332,6 +353,7 @@ class Player:
         opponent.vx = self.slam_horizontal_force * direction
         opponent.vy = self.slam_vertical_force
         opponent.on_ground = False
+        opponent.play_action_animation("hurt", 18)
 
         if ball is not None and ball.state == "held" and ball.holder is opponent:
             ball.state = "loose"
@@ -410,6 +432,7 @@ class Player:
         opponent.vx = DASH_HIT_KNOCKBACK * direction
         opponent.vy = DASH_HIT_VERTICAL
         opponent.on_ground = False
+        opponent.play_action_animation("hurt", 18)
 
         if ball.state == "held" and ball.holder is opponent:
             ball.state = "loose"
@@ -451,6 +474,7 @@ class Player:
         self.shot_charge = 0.0
         self.dunk_cooldown_timer = DUNK_COOLDOWN_FRAMES
         self.dunks += 1
+        self.play_action_animation("attack_3", 24)
         ball.complete_dunk(self, DUNK_POINTS)
         return True
 
@@ -500,6 +524,7 @@ class Player:
 
         self.block_cooldown_timer = BLOCK_COOLDOWN_FRAMES
         self.blocks += 1
+        self.play_action_animation("attack_2", 18)
         self.events.append(("block", ball.x, ball.y))
         return True
 
@@ -549,6 +574,7 @@ class Player:
         self.possession_immune_timer = REBOUND_POSSESSION_IMMUNITY
         self.rebound_cooldown_timer = REBOUND_COOLDOWN_FRAMES
         self.rebounds += 1
+        self.play_action_animation("shield", 14)
 
         # AI 抢到篮板后必须先运球退出篮下，不能下一帧立刻再次冲筐。
         if self.ai_controlled:
@@ -576,13 +602,36 @@ class Player:
         self._apply_steal_or_pickup(True, ball)
         return before is not self and ball.holder is self
 
+    def play_action_animation(self, state, duration=18):
+        """临时播放一次动作动画，结束后自动恢复移动状态。"""
+        if not self.animations or state not in self.animations:
+            return
+        self.anim_action_state = state
+        self.anim_action_timer = max(1, int(duration))
+        self.anim_state = state
+        self.anim_frame_index = 0
+        self.anim_timer = 0
+
     def update_animation(self):
-        if not self.on_ground:
+        if self.anim_action_timer > 0 and self.anim_action_state:
+            new_state = self.anim_action_state
+            self.anim_action_timer -= 1
+            if self.anim_action_timer <= 0:
+                self.anim_action_state = None
+        elif self.is_charging_shot and self.animations and "attack_1" in self.animations:
+            new_state = "attack_1"
+        elif not self.on_ground:
             new_state = "jump"
-        elif self.vx != 0:
+        elif abs(self.vx) > 0.1:
             new_state = "run"
         else:
             new_state = "idle"
+
+        if self.animations and new_state not in self.animations:
+            if new_state == "run" and "walk" in self.animations:
+                new_state = "walk"
+            else:
+                new_state = "idle"
 
         if new_state != self.anim_state:
             self.anim_state = new_state
@@ -594,9 +643,17 @@ class Player:
             self.anim_timer = 0
             if self.animations:
                 frames = self.animations.get(self.anim_state) or self.animations["idle"]
-                self.anim_frame_index = (self.anim_frame_index + 1) % len(frames)
+                # 动作动画播到最后一帧时停住，避免攻击动作不断循环。
+                if self.anim_action_state:
+                    self.anim_frame_index = min(
+                        self.anim_frame_index + 1,
+                        len(frames) - 1,
+                    )
+                else:
+                    self.anim_frame_index = (self.anim_frame_index + 1) % len(frames)
             else:
                 self.anim_frame_index += 1
+
 
     def update_physics(self):
         self.vy += GRAVITY
@@ -669,10 +726,50 @@ class Player:
         if self.animations:
             frames = self.animations.get(self.anim_state) or self.animations["idle"]
             frame_img = frames[self.anim_frame_index % len(frames)]
-            frame_img = pygame.transform.scale(frame_img, (PLAYER_WIDTH, PLAYER_HEIGHT))
-            if not self.facing_right:
-                frame_img = pygame.transform.flip(frame_img, True, False)
-            screen.blit(frame_img, rect)
+            render_height = int(self.character_config.get("render_height", PLAYER_RENDER_HEIGHT))
+            aspect = frame_img.get_width() / max(1, frame_img.get_height())
+            render_width = max(56, int(render_height * aspect))
+            cache_key = (self.anim_state, self.anim_frame_index, render_width, render_height, self.facing_right)
+            sprite = self._render_cache.get(cache_key)
+            if sprite is None:
+                sprite = pygame.transform.scale(frame_img, (render_width, render_height))
+                if not self.facing_right:
+                    sprite = pygame.transform.flip(sprite, True, False)
+                self._render_cache[cache_key] = sprite
+
+            phase = pygame.time.get_ticks() * 0.012
+            bob = 0
+            angle = 0
+            if self.anim_state == "idle":
+                bob = int(math.sin(phase * 0.55) * 1.5)
+            elif self.anim_state == "run":
+                bob = int(abs(math.sin(phase * 1.9)) * 3)
+                angle = math.sin(phase * 1.9) * 2.2
+            elif self.anim_state == "jump":
+                angle = max(-6, min(6, -self.vx * 0.75))
+
+            if angle:
+                sprite = pygame.transform.rotozoom(sprite, angle, 1.0)
+
+            feet_y = rect.bottom + 2 - bob
+            sprite_rect = sprite.get_rect(midbottom=(rect.centerx, feet_y))
+
+            shadow_width = max(28, int(render_width * (0.78 if self.on_ground else 0.52)))
+            shadow = pygame.Surface((shadow_width + 12, 16), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 105 if self.on_ground else 55), shadow.get_rect())
+            screen.blit(shadow, shadow.get_rect(center=(rect.centerx, rect.bottom + 3)))
+
+            if self.is_dashing:
+                trail = sprite.copy()
+                # 避免 set_alpha() 把透明背景变成黑色矩形。
+                # 只对原有像素的 RGBA 做乘法，透明区域仍保持完全透明。
+                trail.fill(
+                    (255, 255, 255, 65),
+                    special_flags=pygame.BLEND_RGBA_MULT,
+                )
+                offset = -18 if self.facing_right else 18
+                screen.blit(trail, sprite_rect.move(offset, 2))
+            screen.blit(sprite, sprite_rect)
         else:
             draw_procedural_character(
                 screen,
@@ -684,7 +781,9 @@ class Player:
             )
 
         if self.is_dashing:
-            pygame.draw.rect(screen, COLOR_DASH_TRAIL, rect, width=3, border_radius=6)
+            glow = pygame.Surface((rect.width + 14, rect.height + 14), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*COLOR_DASH_TRAIL, 150), glow.get_rect(), width=2, border_radius=9)
+            screen.blit(glow, (rect.x - 7, rect.y - 7))
 
         if self.slam_effect_timer > 0:
             progress = 1 - self.slam_effect_timer / 20
@@ -697,8 +796,9 @@ class Player:
                 width=4,
             )
 
-        bar_w = PLAYER_WIDTH
-        pygame.draw.rect(screen, (80, 80, 80), (rect.x, rect.y - 10, bar_w, 4))
+        bar_w = 54
+        bar_x = rect.centerx - bar_w // 2
+        pygame.draw.rect(screen, (7, 12, 24), (bar_x - 2, rect.y - 13, bar_w + 4, 8), border_radius=4)
 
         if self.ability_type == "double_jump":
             ratio = 1 if (self.on_ground or self.double_jump_available) else 0
@@ -708,7 +808,8 @@ class Player:
             ratio = 1
 
         ratio = max(0, min(1, ratio))
-        pygame.draw.rect(screen, (90, 220, 90), (rect.x, rect.y - 10, bar_w * ratio, 4))
+        accent = self.character_config.get("ui_accent", (90, 220, 90))
+        pygame.draw.rect(screen, accent, (bar_x, rect.y - 11, int(bar_w * ratio), 4), border_radius=2)
 
         if self.is_charging_shot:
             meter_x = rect.centerx - SHOT_METER_WIDTH // 2
@@ -742,5 +843,12 @@ class Player:
                 3,
             )
 
-        label = font.render(self.name, True, (255, 255, 255))
-        screen.blit(label, (rect.x, rect.y - 30))
+        prefix = "AI" if self.ai_controlled else self.name.split(" - ")[0]
+        display_name = f"{prefix}  {self.character_name}"
+        label = font.render(display_name, True, (248, 250, 255))
+        label_bg = pygame.Surface((label.get_width() + 14, label.get_height() + 5), pygame.SRCALPHA)
+        pygame.draw.rect(label_bg, (6, 10, 22, 188), label_bg.get_rect(), border_radius=8)
+        pygame.draw.line(label_bg, accent, (6, label_bg.get_height() - 2), (label_bg.get_width() - 6, label_bg.get_height() - 2), 2)
+        label_pos = label_bg.get_rect(midbottom=(rect.centerx, rect.y - 16))
+        screen.blit(label_bg, label_pos)
+        screen.blit(label, label.get_rect(center=label_pos.center))

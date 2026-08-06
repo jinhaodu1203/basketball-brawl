@@ -36,12 +36,10 @@ def _slice_sprite_sheet(path, frame_count):
 
 
 def load_character_animations(folder, frame_counts):
-    """
-    尝试加载并切片某个角色的三套动画贴图。
+    """加载角色动画。
 
-    返回 dict: {"idle": [Surface, ...], "run": [...], "jump": [...]}
-    如果文件夹不存在，或任意一个状态的图片缺失，返回 None
-    (上层会据此自动回退到程序化动画，不会崩溃)。
+    idle 是唯一必需状态；其他动作缺失时会自动回退到 idle，
+    因此以后可以逐步增加动作，不会因为少一张图导致整套动画失效。
     """
     if not folder or not os.path.isdir(folder):
         return None
@@ -50,9 +48,11 @@ def load_character_animations(folder, frame_counts):
     for state, count in frame_counts.items():
         path = os.path.join(folder, f"{state}.png")
         if not os.path.isfile(path):
-            return None
+            continue
         animations[state] = _slice_sprite_sheet(path, count)
 
+    if "idle" not in animations:
+        return None
     return animations
 
 

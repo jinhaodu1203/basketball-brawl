@@ -172,8 +172,10 @@ class Ball:
 
             self.vx = 0
             self.vy = 0
-            self.previous_x = self.x
-            self.previous_y = self.y
+
+            # 不要在这里再次把 previous_x / previous_y 覆盖成当前坐标。
+            # update() 开头已经保存了上一帧位置；扣篮判定需要依赖
+            # “上一帧在篮筐上方，本帧向下穿过篮筐高度”。
             return
 
         self.vy += GRAVITY

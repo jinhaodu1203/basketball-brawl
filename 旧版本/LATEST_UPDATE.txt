@@ -1,0 +1,21 @@
+Basketball Brawl
+Fullscreen and Main-Menu Carousel Adjustment
+
+FIXED
+--------
+- Fullscreen now uses pygame.SCALED with the game's 960x540 logical size.
+- Prevents the unused black strip caused by requesting a literal 960x540 fullscreen mode on macOS.
+
+MAIN MENU
+--------
+- Moved all three carousel characters upward.
+- Enlarged the center and rear characters.
+- Automatically crops transparent/black empty padding around portrait images.
+- Reduced the visible character-name plate size.
+- Moved the carousel baseline and name label upward.
+- No gameplay, arena, language, menu-navigation or skill logic was changed.
+
+FILES TO REPLACE
+--------
+main.py
+ui.py
