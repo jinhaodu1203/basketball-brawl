@@ -32,9 +32,6 @@ def _remove_connected_dark_background(image, threshold=72):
     if width <= 0 or height <= 0:
         return surface
 
-    pixels = pygame.PixelArray(surface)
-    surface.unlock()
-
     def is_background(x, y):
         r, g, b, a = surface.get_at((x, y))
         # Fully transparent and nearly transparent pixels are always background.
@@ -236,6 +233,8 @@ def _load_ui_image(relative_path, size=None):
         if size:
             if is_character:
                 image = pygame.transform.scale(image, size)
+                image = _remove_connected_dark_background(image)
+                image = _crop_transparent_padding(image, padding=0)
             else:
                 image = pygame.transform.smoothscale(image, size)
 
