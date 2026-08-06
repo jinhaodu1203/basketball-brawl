@@ -1,0 +1,6 @@
+Version 2.0.2.1 - Strong Block Screen Shake
+
+- Successful blocks now trigger a stronger 8-frame screen shake.
+- Block shake intensity increased from 3 to 7.
+- Hit-stop increased to 3 frames for a heavier impact.
+- BLOCK! text, particles, ball deflection and AI blocking remain unchanged.

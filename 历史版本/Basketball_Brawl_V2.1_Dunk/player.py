@@ -126,12 +126,6 @@ class Player:
 
         self.ai_controlled = ai_controlled
         self.ai_shot_target = None
-        self.ai_state = "seek_ball"
-        self.ai_state_timer = 0
-        self.ai_offense_timer = 0
-        self.ai_shot_cooldown = 0
-        self.ai_dunk_retry_cooldown = 0
-        self.ai_rebound_exit_timer = 0
         normal_preset = AI_DIFFICULTY_PRESETS["normal"]
         self.ai_shot_miss_chance = normal_preset["shot_miss_chance"]
         self.ai_ability_trigger_chance = normal_preset["dash_trigger_chance"]
@@ -549,16 +543,6 @@ class Player:
         self.possession_immune_timer = REBOUND_POSSESSION_IMMUNITY
         self.rebound_cooldown_timer = REBOUND_COOLDOWN_FRAMES
         self.rebounds += 1
-
-        # AI 抢到篮板后必须先运球退出篮下，不能下一帧立刻再次冲筐。
-        if self.ai_controlled:
-            self.ai_rebound_exit_timer = 48
-            self.ai_dunk_retry_cooldown = max(self.ai_dunk_retry_cooldown, 70)
-            self.ai_shot_cooldown = max(self.ai_shot_cooldown, 30)
-            self.ai_state = "escape_paint"
-            self.ai_state_timer = 0
-            self.ai_shot_target = None
-
         hand_x, hand_y = self.rebound_hand_position()
         self.events.append(("rebound", hand_x, hand_y))
         return True
@@ -630,8 +614,6 @@ class Player:
             self.rebound_cooldown_timer -= 1
         if self.dunk_cooldown_timer > 0:
             self.dunk_cooldown_timer -= 1
-        if self.ai_rebound_exit_timer > 0:
-            self.ai_rebound_exit_timer -= 1
 
         self.update_animation()
 
@@ -657,11 +639,6 @@ class Player:
         self.is_charging_shot = False
         self.shot_charge = 0.0
         self.ai_shot_target = None
-        self.ai_state = "seek_ball"
-        self.ai_state_timer = 0
-        self.ai_offense_timer = 0
-        self.ai_shot_cooldown = 0
-        self.ai_dunk_retry_cooldown = 0
 
     def draw(self, screen, font):
         rect = self.rect()
