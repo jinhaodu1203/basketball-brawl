@@ -5,8 +5,6 @@ import math
 import random
 import pygame
 
-from localization import tr
-
 from constants import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -27,7 +25,7 @@ from constants import (
 EVENT_STYLE = {
     # 只保留“角色技能”和“进球”反馈。所有震屏都控制在轻微范围内。
     "score": {
-        "text": "feedback.score",
+        "text": "BUCKET!",
         "color": (255, 215, 70),
         "shake": SCREEN_SHAKE_SCORE,
         "shake_frames": 4,
@@ -36,7 +34,7 @@ EVENT_STYLE = {
         "particle_count": 10,
     },
     "dash": {
-        "text": "feedback.dash",
+        "text": "DASH!",
         "color": (225, 240, 255),
         "shake": SCREEN_SHAKE_DASH,
         "shake_frames": 3,
@@ -45,7 +43,7 @@ EVENT_STYLE = {
         "particle_count": 8,
     },
     "slam": {
-        "text": "feedback.slam",
+        "text": "SLAM!",
         "color": (255, 150, 70),
         "shake": SCREEN_SHAKE_SLAM,
         "shake_frames": 4,
@@ -54,7 +52,7 @@ EVENT_STYLE = {
         "particle_count": 12,
     },
     "block": {
-        "text": "feedback.block",
+        "text": "BLOCK!",
         "color": (105, 215, 255),
         "shake": SCREEN_SHAKE_BLOCK,
         "shake_frames": 8,
@@ -63,7 +61,7 @@ EVENT_STYLE = {
         "particle_count": 12,
     },
     "dunk": {
-        "text": "feedback.dunk",
+        "text": "DUNK!!",
         "color": (255, 195, 45),
         "shake": SCREEN_SHAKE_DUNK,
         "shake_frames": 12,
@@ -75,7 +73,7 @@ EVENT_STYLE = {
         "outline": True,
     },
     "rebound": {
-        "text": "feedback.rebound",
+        "text": "REBOUND!",
         "color": (255, 245, 165),
         "shake": SCREEN_SHAKE_REBOUND,
         "shake_frames": 3,
@@ -84,7 +82,7 @@ EVENT_STYLE = {
         "particle_count": 7,
     },
     "double_jump": {
-        "text": "feedback.double_jump",
+        "text": "SHADOW JUMP!",
         "color": (180, 145, 255),
         "shake": 1,
         "shake_frames": 2,
@@ -119,7 +117,7 @@ class FeedbackManager:
             self.flash_timer = max(self.flash_timer, 4)
             self.flash_color = style["flash"]
 
-        message = tr(style["text"]) if text is None else text
+        message = style["text"] if text is None else text
         if message:
             self.messages.append({
                 "text": message,

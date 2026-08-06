@@ -1,0 +1,35 @@
+{
+  "app": {"title": "篮球大乱斗", "subtitle": "STEAM 发布开发版本"},
+  "menu": {"play": "开始游戏", "how_to_play": "操作说明", "settings": "设置", "credits": "制作组", "quit": "退出游戏", "hint": "W/S 或方向键选择    回车确认"},
+  "common": {"back": "返回", "on": "开启", "off": "关闭", "player1": "玩家一", "player2": "玩家二", "ai": "电脑", "select_hint": "按 1、2 或 3 选择", "footer_back": "ESC / 回车：返回"},
+  "settings": {"title": "设置", "language": "语言：{value}", "language_en": "English", "language_zh": "简体中文", "fullscreen": "全屏：{value}", "volume": "主音量：{value}%", "show_fps": "显示帧率：{value}", "help": "使用左右键调整选项，修改会自动保存。"},
+  "how": {
+    "title": "操作说明", "p1": "玩家一", "p2": "玩家二", "rules": "比赛规则", "general": "通用操作",
+    "p1_lines": ["移动：A / D", "跳跃、盖帽、篮板、扣篮：W", "投篮 / 蓄力投篮：空格", "抢断 / 捡球：S", "角色技能：左 Shift"],
+    "p2_lines": ["移动：左 / 右方向键", "跳跃、盖帽、篮板、扣篮：上方向键", "投篮 / 蓄力投篮：回车", "抢断 / 捡球：下方向键", "角色技能：右 Ctrl"],
+    "rule_lines": ["三分线内进球：1 分", "三分线外进球：2 分", "率先达到目标分数的玩家获胜", "按住投篮键，在绿色区域松开"],
+    "general_lines": ["暂停比赛：ESC", "扣篮：持球高于篮圈后向下压筐", "跳起时会自动尝试盖帽和争抢篮板", "利用每个角色的技能创造优势"]
+  },
+  "credits": {
+    "title": "制作组", "creator": "创作者", "development": "开发信息", "thanks": "特别感谢", "notice": "版权说明",
+    "creator_lines": ["创作与总制作：杜锦豪 Jinhao Du（David）", "独立游戏开发项目", "原创概念：2D 篮球大乱斗"],
+    "development_lines": ["程序开发：Python + Pygame", "玩法设计、平衡与测试：杜锦豪", "当前版本：Steam 发布开发版本"],
+    "thanks_lines": ["Pygame 社区与开源贡献者", "参与每次版本测试的朋友和玩家", "美国东北大学社区"],
+    "notice_lines": ["正式商业美术、音乐和字体必须拥有授权", "《篮球大乱斗》为独立原创项目", "版权所有 © 2026 杜锦豪。保留所有权利。"]
+  },
+  "select": {"mode_title": "2D 篮球大乱斗", "single": "按 1  ->  单人模式（对战电脑）", "local": "按 2  ->  本地双人模式", "character_title": "{player}：选择角色", "arena_title": "选择球场", "difficulty_title": "选择电脑难度", "easy": "按 1  ->  简单", "normal": "按 2  ->  普通", "hard": "按 3  ->  困难", "loading": "正在加载比赛……", "speed_jump": "速度 {speed:.1f}   弹跳 {jump:.1f}"},
+  "pause": {"title": "游戏暂停", "resume": "ESC / P  -  继续", "restart": "R  -  重新开始", "menu": "M  -  返回主菜单", "quit": "Q  -  退出游戏"},
+  "result": {"win": "你赢了！", "lose": "你输了！", "win_subtitle": "你才是真正的 GOAT！", "lose_subtitle": "电脑才是 GOAT！", "hint": "按回车或 R 再来一局，按 ESC 返回"},
+  "difficulty": {"easy": "简单", "normal": "普通", "hard": "困难"},
+  "feedback": {"score": "进球！", "dash": "冲刺！", "slam": "震地！", "block": "盖帽！", "dunk": "暴扣！！", "rebound": "篮板！", "double_jump": "影子跳跃！"},
+  "characters": {
+    "djh": {"name": "DJH", "description": "拥有爆发力十足的第一步。", "ability": "闪电冲刺"},
+    "gorilla": {"name": "大猩猩", "description": "强壮、沉重、对抗出色。", "ability": "震地重击"},
+    "ninja": {"name": "忍者", "description": "速度快、灵活且难以防守。", "ability": "影子跳跃"}
+  },
+  "arenas": {
+    "street": {"name": "日落街球场", "description": "夕阳下温暖的街头球场。"},
+    "gym": {"name": "霓虹球馆", "description": "灯光明亮的室内球馆。"},
+    "rooftop": {"name": "月夜天台", "description": "城市上空风声呼啸的天台球场。"}
+  }
+}

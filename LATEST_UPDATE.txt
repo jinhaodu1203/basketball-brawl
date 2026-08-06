@@ -1,0 +1,23 @@
+Basketball Brawl
+Steam-ready Step 3 — Bilingual Localization
+
+NEW
+---
+- Added instant English / Simplified Chinese switching in Settings.
+- Added JSON language files: lang/en.json and lang/zh.json.
+- Added persistent language saving in settings.json.
+- Added system-font fallback for Chinese text.
+
+LOCALIZED
+---
+- Main menu
+- Settings
+- How To Play
+- Credits
+- Match mode, character, arena and difficulty selection
+- Loading screen
+- Pause menu
+- Win / loss screen
+- Character names, abilities and descriptions
+- Arena names and descriptions
+- Gameplay feedback such as DUNK, BLOCK and REBOUND

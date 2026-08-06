@@ -123,7 +123,7 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
         p1_config["color"],
         PLAYER1_CONTROLS,
         facing_right=False,
-        name=f"{tr('common.player1')} - {tr('characters.' + p1_config['id'] + '.name')}",
+        name=f"{tr('common.player1')} - {tr(f'characters.{p1_config["id"]}.name')}",
         sprite_folder=os.path.join(
             assets_dir, "characters", p1_config["sprite_folder"]
         ),
@@ -132,9 +132,9 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
     )
 
     p2_name = (
-        f"{tr('common.ai')} {tr('characters.' + p2_config['id'] + '.name')} ({tr('difficulty.' + difficulty)})"
+        f"{tr('common.ai')} {tr(f'characters.{p2_config["id"]}.name')} ({tr(f'difficulty.{difficulty}')})"
         if single_player
-        else f"{tr('common.player2')} - {tr('characters.' + p2_config['id'] + '.name')}"
+        else f"{tr('common.player2')} - {tr(f'characters.{p2_config["id"]}.name')}"
     )
     player2 = Player(
         arena["player2_spawn_x"],

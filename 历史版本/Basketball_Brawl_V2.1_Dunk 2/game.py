@@ -20,7 +20,6 @@ from ball import Ball
 from characters import get_character
 from arenas import get_arena, draw_arena
 from feedback import FeedbackManager
-from localization import tr
 from ui import (
     select_mode,
     select_character,
@@ -92,9 +91,9 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
     single_player = select_mode(screen, font, title_font)
 
     p1_config = get_character(
-        select_character(screen, font, small_font, title_font, tr("common.player1"))
+        select_character(screen, font, small_font, title_font, "Player 1")
     )
-    p2_label = tr("common.ai") if single_player else tr("common.player2")
+    p2_label = "AI" if single_player else "Player 2"
     p2_config = get_character(
         select_character(screen, font, small_font, title_font, p2_label)
     )
@@ -108,7 +107,7 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
 
     # 立即显示加载反馈，避免选择场景后看起来没有响应。
     screen.fill((30, 30, 40))
-    loading = title_font.render(tr("select.loading"), True, (255, 255, 255))
+    loading = title_font.render("Loading Match...", True, (255, 255, 255))
     screen.blit(
         loading,
         (SCREEN_WIDTH // 2 - loading.get_width() // 2,
@@ -123,7 +122,7 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
         p1_config["color"],
         PLAYER1_CONTROLS,
         facing_right=False,
-        name=f"{tr('common.player1')} - {tr('characters.' + p1_config['id'] + '.name')}",
+        name=f"P1 - {p1_config['name']}",
         sprite_folder=os.path.join(
             assets_dir, "characters", p1_config["sprite_folder"]
         ),
@@ -132,9 +131,9 @@ def _create_match(screen, font, small_font, title_font, assets_dir):
     )
 
     p2_name = (
-        f"{tr('common.ai')} {tr('characters.' + p2_config['id'] + '.name')} ({tr('difficulty.' + difficulty)})"
+        f"AI {p2_config['name']} ({AI_DIFFICULTY_LABELS[difficulty]})"
         if single_player
-        else f"{tr('common.player2')} - {tr('characters.' + p2_config['id'] + '.name')}"
+        else f"P2 - {p2_config['name']}"
     )
     player2 = Player(
         arena["player2_spawn_x"],

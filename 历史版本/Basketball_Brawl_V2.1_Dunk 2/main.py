@@ -8,8 +8,7 @@ import pygame
 from constants import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
 from game import play_session
 from settings import load_settings, save_settings
-from localization import create_fonts, set_language
-from ui import credits_menu, how_to_play_menu, main_menu, settings_menu
+from ui import main_menu, settings_menu
 
 
 def create_screen(fullscreen: bool):
@@ -34,8 +33,9 @@ def main():
     screen = create_screen(settings.fullscreen)
     pygame.display.set_caption("Basketball Brawl")
 
-    set_language(settings.language)
-    font, small_font, title_font = create_fonts(settings.language)
+    font = pygame.font.SysFont(None, 30)
+    small_font = pygame.font.SysFont(None, 20)
+    title_font = pygame.font.SysFont(None, 48)
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     clock = pygame.time.Clock()
     apply_audio_settings(settings)
@@ -53,24 +53,16 @@ def main():
                 assets_dir,
                 show_fps=settings.show_fps,
             )
-        elif action == "how_to_play":
-            if how_to_play_menu(screen, font, small_font, title_font) == "quit":
-                running = False
         elif action == "settings":
             old_fullscreen = settings.fullscreen
             settings, result = settings_menu(
                 screen, font, small_font, title_font, settings
             )
-            set_language(settings.language)
-            font, small_font, title_font = create_fonts(settings.language)
             save_settings(settings)
             apply_audio_settings(settings)
             if settings.fullscreen != old_fullscreen:
                 screen = create_screen(settings.fullscreen)
             if result == "quit":
-                running = False
-        elif action == "credits":
-            if credits_menu(screen, font, small_font, title_font) == "quit":
                 running = False
         else:
             running = False
