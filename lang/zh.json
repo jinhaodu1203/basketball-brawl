@@ -137,32 +137,32 @@
   "characters": {
     "djh": {
       "name": "DJH",
-      "description": "超快第一步",
+      "description": "球场上速度最快的球员。",
       "ability": "闪电冲刺"
     },
     "gorilla": {
       "name": "BRAX",
-      "description": "雄鹰般的对抗",
+      "description": "禁区霸主。",
       "ability": "裂地猛击"
     },
     "ninja": {
       "name": "KAGE",
-      "description": "速度快敏捷高",
+      "description": "如影子般行动。",
       "ability": "影子跳跃"
     }
   },
   "arenas": {
     "street": {
-      "name": "日照街头",
-      "description": "夕阳的余晖洒下"
+      "name": "夕阳球场",
+      "description": "沐浴在金色夕阳下的经典街头球场。"
     },
     "gym": {
       "name": "霓虹街区",
-      "description": "赛博朋克式风格"
+      "description": "霓虹闪耀，观众沸腾。传奇从这里开始。"
     },
     "rooftop": {
-      "name": "天际球馆",
-      "description": "你们这些警察真奇怪..."
+      "name": "天际竞技场",
+      "description": "在城市天际线之上展开巅峰对决。"
     }
   },
   "training": {

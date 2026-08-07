@@ -134,36 +134,36 @@
     "rebound": "REBOUND!",
     "double_jump": "SHADOW JUMP!"
   },
-    "characters": {
-        "djh": {
-            "name": "DJH",
-            "description": "The fastest in the world",
-            "ability": "Dash"
+  "characters": {
+    "djh": {
+      "name": "DJH",
+      "description": "The fastest player on the court.",
+      "ability": "Dash"
     },
-        "gorilla": {
-            "name": "BRAX",
-            "description": "Dominator of the paint",
-            "ability": "Ground Slam"
+    "gorilla": {
+      "name": "BRAX",
+      "description": "Dominator of the paint.",
+      "ability": "Ground Slam"
     },
-        "ninja": {
-            "name": "KAGE",
-            "description": "No one can catch a shadow",
-            "ability": "Shadow Jump"
+    "ninja": {
+      "name": "KAGE",
+      "description": "No one can catch a shadow.",
+      "ability": "Shadow Jump"
     }
   },
-    "arenas": {
-        "street": {
-            "name": "Sunset",
-            "description": "Play in sunset"
-        },
-        "gym": {
-            "name": "Neon District",
-            "description": "A cyber-lit district where legends are bone"
-        },
-        "rooftop": {
-            "name": "Skyline Arena",
-            "description": "Battle above the city's skyline"
-        }
+  "arenas": {
+    "street": {
+      "name": "Sunset Court",
+      "description": "A beautiful court beneath the golden sunset."
+    },
+    "gym": {
+      "name": "Neon District",
+      "description": "Bright lights. Loud crowds. Endless battles."
+    },
+    "rooftop": {
+      "name": "Skyline Arena",
+      "description": "Play above the city skyline."
+    }
   },
   "training": {
     "title": "TRAINING CAMP",

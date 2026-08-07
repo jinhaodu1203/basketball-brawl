@@ -748,10 +748,10 @@ def select_mode(screen, font, title_font):
 def select_character(screen, font, small_font, title_font, player_label):
     clock = pygame.time.Clock()
     selected = 0
-    card_width, card_height, gap = 250, 340, 25
+    card_width, card_height, gap = 250, 360, 25
     total_width = len(CHARACTER_ORDER) * card_width + (len(CHARACTER_ORDER) - 1) * gap
     start_x = SCREEN_WIDTH // 2 - total_width // 2
-    card_y = 128
+    card_y = 118
 
     while True:
         rects = [
@@ -862,12 +862,14 @@ def select_character(screen, font, small_font, title_font, player_label):
                 True,
                 (210, 219, 235),
             )
-            stats_surface = small_font.render(
-                tr(
-                    "select.speed_jump",
-                    speed=config["move_speed"],
-                    jump=abs(config["jump_velocity"]),
-                ),
+            ratings = config.get("ratings", {})
+            rating_row_1 = small_font.render(
+                f"SPD {ratings.get('speed', 3)}/5    3PT {ratings.get('three', 3)}/5",
+                True,
+                (158, 177, 207),
+            )
+            rating_row_2 = small_font.render(
+                f"DNK {ratings.get('dunk', 3)}/5    DEF {ratings.get('defense', 3)}/5",
                 True,
                 (158, 177, 207),
             )
@@ -892,8 +894,12 @@ def select_character(screen, font, small_font, title_font, player_label):
                 1,
             )
             screen.blit(
-                stats_surface,
-                stats_surface.get_rect(center=(card_rect.centerx, local_card_y + 321)),
+                rating_row_1,
+                rating_row_1.get_rect(center=(card_rect.centerx, local_card_y + 325)),
+            )
+            screen.blit(
+                rating_row_2,
+                rating_row_2.get_rect(center=(card_rect.centerx, local_card_y + 346)),
             )
 
         pygame.display.flip()

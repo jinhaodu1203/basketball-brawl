@@ -4,7 +4,8 @@ CHARACTERS = {
     "djh": {
         "id": "djh",
         "name": "DJH",
-        "description": "Player with an explosive first step.",
+        "description": "The fastest player on the court.",
+        "ratings": {"speed": 5, "three": 3, "dunk": 2, "defense": 3},
         "color": (70, 130, 220),
         "move_speed": 5.3,
         "jump_velocity": -14.0,
@@ -26,8 +27,9 @@ CHARACTERS = {
     },
     "gorilla": {
         "id": "gorilla",
-        "name": "Gorilla",
-        "description": "Powerful and heavy.",
+        "name": "BRAX",
+        "description": "A dominant force in the paint.",
+        "ratings": {"speed": 2, "three": 2, "dunk": 5, "defense": 5},
         "color": (125, 90, 75),
         "move_speed": 4.2,
         "jump_velocity": -12.5,
@@ -50,8 +52,9 @@ CHARACTERS = {
     },
     "ninja": {
         "id": "ninja",
-        "name": "Ninja",
-        "description": "Fast, agile and difficult to defend.",
+        "name": "KAGE",
+        "description": "Move like a shadow.",
+        "ratings": {"speed": 4, "three": 4, "dunk": 3, "defense": 4},
         "color": (100, 90, 180),
         "move_speed": 5.8,
         "jump_velocity": -15.0,
