@@ -389,30 +389,119 @@ def main_menu(screen, font, small_font, title_font):
         clock.tick(FPS)
 
 
-def _info_page(screen, title_font, small_font, title, sections, footer=None):
-    """绘制可复用的信息页；sections 为 (heading, lines) 列表。"""
-    _draw_backdrop(screen, (62, 151, 255))
-    title_surface = title_font.render(title, True, COLOR_TEXT)
-    screen.blit(title_surface, title_surface.get_rect(center=(SCREEN_WIDTH // 2, 54)))
+def _wrap_text(font, text, max_width):
+    """按像素宽度换行，避免全屏缩放后信息页文字跨列重叠。"""
+    text = str(text).strip()
+    if not text:
+        return [""]
 
-    panel = pygame.Rect(74, 95, SCREEN_WIDTH - 148, SCREEN_HEIGHT - 150)
+    # 中文通常没有空格，英文则优先按单词换行。
+    words = text.split(" ")
+    if len(words) == 1:
+        units = list(text)
+        separator = ""
+    else:
+        units = words
+        separator = " "
+
+    wrapped = []
+    current = ""
+    for unit in units:
+        candidate = unit if not current else current + separator + unit
+        if font.size(candidate)[0] <= max_width:
+            current = candidate
+            continue
+
+        if current:
+            wrapped.append(current)
+
+        # 单个超长单词继续按字符拆分，确保永远不会越界。
+        if font.size(unit)[0] > max_width:
+            piece = ""
+            for character in unit:
+                candidate_piece = piece + character
+                if piece and font.size(candidate_piece)[0] > max_width:
+                    wrapped.append(piece)
+                    piece = character
+                else:
+                    piece = candidate_piece
+            current = piece
+        else:
+            current = unit
+
+    if current:
+        wrapped.append(current)
+    return wrapped
+
+
+def _info_page(screen, title_font, small_font, title, sections, footer=None):
+    """绘制可复用的信息页；固定 2×2 信息网格并自动换行。"""
+    _draw_backdrop(screen, (62, 151, 255))
+
+    title_surface = title_font.render(title, True, COLOR_TEXT)
+    screen.blit(title_surface, title_surface.get_rect(center=(SCREEN_WIDTH // 2, 62)))
+
+    panel = pygame.Rect(78, 104, SCREEN_WIDTH - 156, SCREEN_HEIGHT - 164)
     _draw_panel(screen, panel, accent=(62, 151, 255), alpha=232)
 
     columns = 2 if len(sections) > 2 else 1
+    rows = max(1, (len(sections) + columns - 1) // columns)
     column_width = panel.width // columns
+    row_height = panel.height // rows
+    inner_margin_x = 30
+    inner_margin_y = 24
+    max_text_width = column_width - inner_margin_x * 2
+    line_height = max(18, small_font.get_linesize() - 3)
+
+    # 中间分隔线让四块内容更清晰，同时不改变现有 UI 风格。
+    if columns == 2:
+        divider_x = panel.centerx
+        pygame.draw.line(
+            screen,
+            (62, 151, 255, 70),
+            (divider_x, panel.y + 18),
+            (divider_x, panel.bottom - 18),
+            1,
+        )
+    if rows == 2:
+        divider_y = panel.y + row_height
+        pygame.draw.line(
+            screen,
+            (62, 151, 255, 55),
+            (panel.x + 18, divider_y),
+            (panel.right - 18, divider_y),
+            1,
+        )
+
     for index, (heading, lines) in enumerate(sections):
         column = index % columns
         row = index // columns
-        x = panel.x + 30 + column * column_width
-        y = panel.y + 26 + row * 178
+        x = panel.x + column * column_width + inner_margin_x
+        y = panel.y + row * row_height + inner_margin_y
+
         heading_surface = small_font.render(heading, True, (88, 181, 255))
         screen.blit(heading_surface, (x, y))
-        for line_index, line in enumerate(lines):
-            line_surface = small_font.render(line, True, (225, 230, 242))
-            screen.blit(line_surface, (x, y + 29 + line_index * 24))
 
-    footer_surface = small_font.render(footer or tr("common.footer_back"), True, (170, 180, 205))
-    screen.blit(footer_surface, footer_surface.get_rect(center=(SCREEN_WIDTH // 2, 510)))
+        text_y = y + line_height + 7
+        section_bottom = panel.y + (row + 1) * row_height - 12
+
+        wrapped_lines = []
+        for line in lines:
+            wrapped_lines.extend(_wrap_text(small_font, line, max_text_width))
+
+        for line in wrapped_lines:
+            if text_y + line_height > section_bottom:
+                break
+            line_surface = small_font.render(line, True, (225, 230, 242))
+            screen.blit(line_surface, (x, text_y))
+            text_y += line_height
+
+    if footer:
+        footer_surface = small_font.render(footer, True, (170, 180, 205))
+        screen.blit(
+            footer_surface,
+            footer_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 22)),
+        )
 
 
 def how_to_play_menu(screen, font, small_font, title_font):
@@ -424,16 +513,19 @@ def how_to_play_menu(screen, font, small_font, title_font):
     ]
     clock = pygame.time.Clock()
     while True:
-        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 48, 180, 34)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and back_rect.collidepoint(event.pos):
-                return "back"
             if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
                 return "back"
-        _info_page(screen, title_font, small_font, tr("how.title"), sections, footer="")
-        _draw_back_button(screen, font)
+        _info_page(
+            screen,
+            title_font,
+            small_font,
+            tr("how.title"),
+            sections,
+            footer=tr("common.footer_back"),
+        )
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -446,16 +538,19 @@ def credits_menu(screen, font, small_font, title_font):
     ]
     clock = pygame.time.Clock()
     while True:
-        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 48, 180, 34)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and back_rect.collidepoint(event.pos):
-                return "back"
             if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
                 return "back"
-        _info_page(screen, title_font, small_font, tr("credits.title"), sections, footer="")
-        _draw_back_button(screen, font)
+        _info_page(
+            screen,
+            title_font,
+            small_font,
+            tr("credits.title"),
+            sections,
+            footer=tr("common.footer_back"),
+        )
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -902,18 +997,30 @@ def select_arena(screen, font, small_font, title_font):
                 True,
                 COLOR_TEXT,
             )
-            desc = small_font.render(
-                tr(f"arenas.{arena_id}.description"),
-                True,
-                COLOR_TEXT,
-            )
             screen.blit(name, name.get_rect(center=(rect.centerx, y + 205)))
-            screen.blit(desc, desc.get_rect(center=(rect.centerx, y + 245)))
+
+            # English arena descriptions can be wider than one card.
+            # Wrap them to at most two centered lines so they never overlap
+            # neighbouring cards; Chinese descriptions keep working too.
+            description = tr(f"arenas.{arena_id}.description")
+            description_lines = _wrap_text(
+                small_font,
+                description,
+                card_w - 44,
+            )[:2]
+            description_y = y + 238
+            for line in description_lines:
+                desc = small_font.render(line, True, (210, 219, 235))
+                screen.blit(
+                    desc,
+                    desc.get_rect(center=(rect.centerx, description_y)),
+                )
+                description_y += 22
 
         hint = small_font.render(tr("common.select_hint"), True, COLOR_TEXT)
         screen.blit(
             hint,
-            hint.get_rect(center=(SCREEN_WIDTH // 2, 480)),
+            hint.get_rect(center=(SCREEN_WIDTH // 2, 492)),
         )
         pygame.display.flip()
         clock.tick(FPS)
