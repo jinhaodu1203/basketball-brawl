@@ -34,6 +34,12 @@ DUNK_RETRY_COOLDOWN = 80
 POST_SHOT_COOLDOWN = 36
 MAX_DUNK_COMMIT_FRAMES = 95
 MAX_OFFENSE_SETUP_FRAMES = 150
+
+# 每次获得球权先锁定一种进攻方式，避免 AI 每次靠近篮筐都被扣篮分支截走。
+ATTACK_DUNK = "dunk"
+ATTACK_MIDRANGE = "midrange"
+ATTACK_THREE = "three"
+AI_DUNK_PLAN_CHANCE = 0.28
 LEFT_WALL_ESCAPE_MARGIN = 18
 LEFT_OF_RIM_ESCAPE_MARGIN = 8
 
@@ -51,6 +57,8 @@ def _ensure_ai_state(player):
         player.ai_offense_timer = 0
     if not hasattr(player, "ai_rebound_exit_timer"):
         player.ai_rebound_exit_timer = 0
+    if not hasattr(player, "ai_attack_plan"):
+        player.ai_attack_plan = None
 
 
 def _set_state(player, state):
@@ -66,6 +74,20 @@ def _tick_cooldowns(player):
         player.ai_shot_cooldown -= 1
     if player.ai_dunk_retry_cooldown > 0:
         player.ai_dunk_retry_cooldown -= 1
+
+
+
+def _choose_attack_plan(player):
+    """为当前球权选择并锁定一种进攻方式。"""
+    roll = random.random()
+    three_chance = max(0.08, min(0.45, player.ai_three_point_shot_chance))
+    dunk_chance = AI_DUNK_PLAN_CHANCE
+
+    if roll < dunk_chance:
+        return ATTACK_DUNK
+    if roll < dunk_chance + three_chance:
+        return ATTACK_THREE
+    return ATTACK_MIDRANGE
 
 
 def _shoot(player, ball):
@@ -105,6 +127,14 @@ def update_ai(player, ball, opponent):
 
     has_ball = ball.state == "held" and ball.holder is player
     opponent_has_ball = ball.state == "held" and ball.holder is opponent
+
+    # 新球权只选择一次进攻方案；失去球权后清空，下一次重新选择。
+    if has_ball and player.ai_attack_plan is None:
+        player.ai_attack_plan = _choose_attack_plan(player)
+        player.ai_shot_target = None
+        player.ai_offense_timer = 0
+    elif not has_ball:
+        player.ai_attack_plan = None
     opponent_shot = ball.state == "flying" and ball.last_shooter is opponent
 
     # 最高优先级脱困：持球人一旦进入左墙/篮板背后区域，立即终止扣篮，
@@ -159,7 +189,8 @@ def update_ai(player, ball, opponent):
 
         # 冷却结束且处于合理冲筐区，才进入一次完整扣篮尝试。
         elif (
-            player.ai_dunk_retry_cooldown <= 0
+            player.ai_attack_plan == ATTACK_DUNK
+            and player.ai_dunk_retry_cooldown <= 0
             and 0 < distance_from_rim <= AI_DUNK_APPROACH_DISTANCE
         ):
             _set_state(player, DRIVE_DUNK)
@@ -167,12 +198,13 @@ def update_ai(player, ball, opponent):
 
         else:
             if player.ai_shot_target is None:
-                if random.random() < player.ai_three_point_shot_chance:
+                if player.ai_attack_plan == ATTACK_THREE:
                     shot_distance = (
                         player.arena["three_point_distance"]
                         + AI_THREE_POINT_SHOOT_MARGIN
                     )
                 else:
+                    # 中投固定停在禁区外，避免移动途中又切回篮下终结。
                     shot_distance = AI_TWO_POINT_SHOOT_OFFSET
                 player.ai_shot_target = hoop_x + shot_distance
 
@@ -232,6 +264,8 @@ def update_ai(player, ball, opponent):
             if failed_landing or timed_out:
                 player.ai_dunk_retry_cooldown = DUNK_RETRY_COOLDOWN
                 player.ai_shot_cooldown = max(player.ai_shot_cooldown, POST_SHOT_COOLDOWN)
+                # 扣篮失败后改打中投，避免连续重复冲筐。
+                player.ai_attack_plan = ATTACK_MIDRANGE
                 _set_state(player, ESCAPE_PAINT)
                 direction = 1
             elif airborne:

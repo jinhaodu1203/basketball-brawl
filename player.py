@@ -134,6 +134,7 @@ class Player:
         self.ai_shot_cooldown = 0
         self.ai_dunk_retry_cooldown = 0
         self.ai_rebound_exit_timer = 0
+        self.ai_attack_plan = None
         normal_preset = AI_DIFFICULTY_PRESETS["normal"]
         self.ai_shot_miss_chance = normal_preset["shot_miss_chance"]
         self.ai_ability_trigger_chance = normal_preset["dash_trigger_chance"]
@@ -719,6 +720,7 @@ class Player:
         self.ai_offense_timer = 0
         self.ai_shot_cooldown = 0
         self.ai_dunk_retry_cooldown = 0
+        self.ai_attack_plan = None
 
     def draw(self, screen, font):
         rect = self.rect()
