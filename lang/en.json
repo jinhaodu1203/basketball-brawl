@@ -9,7 +9,8 @@
     "settings": "SETTINGS",
     "credits": "CREDITS",
     "quit": "QUIT",
-    "hint": "W/S or arrows: select    ENTER: confirm"
+    "hint": "W/S or arrows: select    ENTER: confirm",
+    "feedback": "FEEDBACK"
   },
   "common": {
     "back": "BACK",
@@ -172,5 +173,16 @@
     "points": "Points: {value}",
     "dunks": "Dunks: {value}",
     "hint": "TAB: Return ball    R: Reset ball    ESC: Back"
+  },
+  "feedback_page": {
+    "title": "PLAYER FEEDBACK",
+    "lines": [
+      "Found a bug or have an idea for HOOP HAVOC?",
+      "Send it directly to the developer through GitHub.",
+      "Please include your platform and what happened."
+    ],
+    "open": "OPEN FEEDBACK PAGE",
+    "opened": "Feedback page opened in your browser.",
+    "hint": "ENTER: open page    ESC: back"
   }
 }

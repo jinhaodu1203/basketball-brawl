@@ -2,6 +2,7 @@
 
 import os
 import sys
+import webbrowser
 import pygame
 
 from constants import (
@@ -337,6 +338,7 @@ def main_menu(screen, font, small_font, title_font):
             (tr("menu.how_to_play"), "how_to_play"),
             (tr("menu.settings"), "settings"),
             (tr("menu.credits"), "credits"),
+            (tr("menu.feedback"), "feedback"),
             (tr("menu.quit"), "quit"),
         ]
         rects = [pygame.Rect(595, 175 + i * 57, 300, 44) for i in range(len(options))]
@@ -553,6 +555,80 @@ def credits_menu(screen, font, small_font, title_font):
         )
         pygame.display.flip()
         clock.tick(FPS)
+
+FEEDBACK_URL = "https://github.com/jinhaodu1203/basketball-brawl/issues/new?title=HOOP%20HAVOC%20Feedback&body=Game%20version%3A%0APlatform%3A%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%3F%0A%0AOther%20comments%3A%0A"
+
+
+def feedback_menu(screen, font, small_font, title_font):
+    """Player feedback page. Opens the project's GitHub issue form."""
+    selected = 0
+    clock = pygame.time.Clock()
+    status_until = 0
+
+    while True:
+        button_rects = [
+            pygame.Rect(SCREEN_WIDTH // 2 - 190, 318, 380, 52),
+            pygame.Rect(SCREEN_WIDTH // 2 - 190, 386, 380, 52),
+        ]
+        hovered = _mouse_selected(button_rects)
+        if hovered is not None:
+            selected = hovered
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+
+            clicked = _clicked_index(event, button_rects)
+            if clicked is not None:
+                selected = clicked
+                activate = True
+            else:
+                activate = False
+
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
+                    selected = 1 - selected
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    activate = True
+                elif event.key == pygame.K_ESCAPE:
+                    return "back"
+
+            if activate:
+                if selected == 0:
+                    try:
+                        webbrowser.open(FEEDBACK_URL, new=2)
+                        status_until = pygame.time.get_ticks() + 2200
+                    except Exception:
+                        status_until = pygame.time.get_ticks() + 2200
+                else:
+                    return "back"
+
+        _draw_backdrop(screen, (62, 151, 255))
+        title = title_font.render(tr("feedback_page.title"), True, COLOR_TEXT)
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 72)))
+
+        panel = pygame.Rect(SCREEN_WIDTH // 2 - 310, 118, 620, 170)
+        _draw_panel(screen, panel, accent=(62, 151, 255), alpha=220)
+
+        lines = tr_list("feedback_page.lines")
+        for index, line in enumerate(lines):
+            rendered = small_font.render(line, True, (225, 232, 245))
+            screen.blit(rendered, rendered.get_rect(center=(SCREEN_WIDTH // 2, 157 + index * 32)))
+
+        labels = [tr("feedback_page.open"), tr("common.back")]
+        for index, label in enumerate(labels):
+            _draw_menu_button(screen, font, label, button_rects[index], index == selected)
+
+        if pygame.time.get_ticks() < status_until:
+            status = small_font.render(tr("feedback_page.opened"), True, (111, 224, 164))
+            screen.blit(status, status.get_rect(center=(SCREEN_WIDTH // 2, 468)))
+        else:
+            hint = small_font.render(tr("feedback_page.hint"), True, (170, 185, 210))
+            screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 468)))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
 
 def settings_menu(screen, font, small_font, title_font, settings):
     items = ["language", "fullscreen", "volume", "show_fps", "back"]

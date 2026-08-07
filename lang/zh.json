@@ -9,7 +9,8 @@
     "settings": "设置",
     "credits": "制作组",
     "quit": "退出游戏",
-    "hint": "W/S 或方向键选择    回车确认"
+    "hint": "W/S 或方向键选择    回车确认",
+    "feedback": "玩家反馈"
   },
   "common": {
     "back": "返回",
@@ -172,5 +173,16 @@
     "points": "得分：{value}",
     "dunks": "扣篮：{value}",
     "hint": "TAB：篮球回手    R：重置篮球    ESC：返回"
+  },
+  "feedback_page": {
+    "title": "玩家反馈",
+    "lines": [
+      "发现 Bug，或者有想加入 HOOP HAVOC 的新点子？",
+      "可以通过 GitHub 直接把反馈发送给开发者。",
+      "建议写清楚你的系统、问题现象和复现方式。"
+    ],
+    "open": "打开反馈页面",
+    "opened": "已在浏览器中打开反馈页面。",
+    "hint": "回车：打开页面    ESC：返回"
   }
 }

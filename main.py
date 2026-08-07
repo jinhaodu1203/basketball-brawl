@@ -9,7 +9,7 @@ from constants import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
 from game import play_session
 from settings import load_settings, save_settings
 from localization import create_fonts, set_language
-from ui import credits_menu, how_to_play_menu, main_menu, settings_menu
+from ui import credits_menu, feedback_menu, how_to_play_menu, main_menu, settings_menu
 
 
 def create_screen(fullscreen: bool):
@@ -141,6 +141,9 @@ def main():
                 running = False
         elif action == "credits":
             if credits_menu(screen, font, small_font, title_font) == "quit":
+                running = False
+        elif action == "feedback":
+            if feedback_menu(screen, font, small_font, title_font) == "quit":
                 running = False
         else:
             running = False
