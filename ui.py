@@ -3,6 +3,7 @@
 import os
 import sys
 import webbrowser
+from urllib.parse import quote
 import pygame
 
 from constants import (
@@ -341,7 +342,7 @@ def main_menu(screen, font, small_font, title_font):
             (tr("menu.feedback"), "feedback"),
             (tr("menu.quit"), "quit"),
         ]
-        rects = [pygame.Rect(595, 175 + i * 57, 300, 44) for i in range(len(options))]
+        rects = [pygame.Rect(595, 148 + i * 54, 300, 44) for i in range(len(options))]
         hovered = _mouse_selected(rects)
         if hovered is not None:
             selected = hovered
@@ -380,7 +381,7 @@ def main_menu(screen, font, small_font, title_font):
         )
 
         menu_title = small_font.render("SELECT MODE", True, (132, 154, 190))
-        screen.blit(menu_title, (595, 140))
+        screen.blit(menu_title, (595, 116))
 
         for index, (label, _) in enumerate(options):
             _draw_menu_button(screen, font, label, rects[index], index == selected)
@@ -556,79 +557,317 @@ def credits_menu(screen, font, small_font, title_font):
         pygame.display.flip()
         clock.tick(FPS)
 
-FEEDBACK_URL = "https://github.com/jinhaodu1203/basketball-brawl/issues/new?title=HOOP%20HAVOC%20Feedback&body=Game%20version%3A%0APlatform%3A%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%3F%0A%0AOther%20comments%3A%0A"
+FEEDBACK_ISSUE_URL = "https://github.com/jinhaodu1203/basketball-brawl/issues/new"
+
+
+def _draw_feedback_input(screen, font, rect, text, placeholder, active=False, multiline=False):
+    """Draw one text field in the same neon/arcade style as the rest of the UI."""
+    accent = (255, 132, 55) if active else (62, 82, 117)
+    fill = (14, 23, 42)
+    pygame.draw.rect(screen, fill, rect, border_radius=9)
+    pygame.draw.rect(screen, accent, rect, 2 if active else 1, border_radius=9)
+
+    shown = text if text else placeholder
+    color = COLOR_TEXT if text else (112, 132, 164)
+    padding_x = 14
+    padding_y = 9
+
+    if multiline:
+        lines = []
+        for raw_line in shown.split("\n"):
+            lines.extend(_wrap_text(font, raw_line, rect.width - padding_x * 2))
+        max_lines = max(1, (rect.height - padding_y * 2) // max(1, font.get_linesize()))
+        for index, line in enumerate(lines[:max_lines]):
+            surface = font.render(line, True, color)
+            screen.blit(surface, (rect.x + padding_x, rect.y + padding_y + index * font.get_linesize()))
+    else:
+        display_text = shown
+        while display_text and font.size(display_text)[0] > rect.width - padding_x * 2:
+            display_text = display_text[1:]
+        surface = font.render(display_text, True, color)
+        screen.blit(surface, surface.get_rect(midleft=(rect.x + padding_x, rect.centery)))
+
+
+def _feedback_issue_url(feedback_type, content, email):
+    """Build a pre-filled bilingual GitHub issue URL from the in-game feedback form."""
+    labels = {
+        "bug": ("BUG", "游戏问题 / BUG"),
+        "balance": ("BALANCE", "平衡建议 / BALANCE"),
+        "feature": ("FEATURE", "新功能建议 / FEATURE"),
+        "gameplay": ("GAMEPLAY", "游戏体验 / GAMEPLAY"),
+        "art_ui": ("ART/UI", "美术 / UI"),
+        "audio": ("AUDIO", "音效 / AUDIO"),
+        "localization": ("LOCALIZATION", "翻译问题 / LOCALIZATION"),
+        "other": ("OTHER", "其他 / OTHER"),
+    }
+    type_code, type_label = labels.get(feedback_type, labels["other"])
+    title = f"[{type_code}] HOOP HAVOC Feedback"
+    body = (
+        "HOOP HAVOC 玩家反馈 / PLAYER FEEDBACK\n\n"
+        f"反馈类型：{type_code}\n"
+        f"Feedback Type: {type_code}\n"
+        f"类型说明 / Type: {type_label}\n\n"
+        "反馈内容 / Feedback:\n"
+        f"{content.strip() or '(未填写详细内容 / No details provided)'}\n\n"
+        f"邮箱 / Email: {email.strip() or '(未填写 / Not provided)'}\n\n"
+        "---\n"
+        "通过 HOOP HAVOC 游戏内反馈页面提交 / Submitted from the in-game feedback page."
+    )
+    return f"{FEEDBACK_ISSUE_URL}?title={quote(title)}&body={quote(body)}"
 
 
 def feedback_menu(screen, font, small_font, title_font):
-    """Player feedback page. Opens the project's GitHub issue form."""
-    selected = 0
+    """Bilingual in-game feedback form with a real feedback-type dropdown."""
     clock = pygame.time.Clock()
+
+    zh_font, zh_small, zh_title = create_fonts("zh")
+    en_font, en_small, en_title = create_fonts("en")
+
+    type_keys = [
+        "bug", "balance", "feature", "gameplay",
+        "art_ui", "audio", "localization", "other",
+    ]
+    type_labels = {
+        "bug": "游戏问题 / BUG",
+        "balance": "平衡建议 / BALANCE",
+        "feature": "新功能建议 / FEATURE",
+        "gameplay": "游戏体验 / GAMEPLAY",
+        "art_ui": "美术 / UI",
+        "audio": "音效 / AUDIO",
+        "localization": "翻译问题 / LOCALIZATION",
+        "other": "其他 / OTHER",
+    }
+    type_index = 0
+    dropdown_open = False
+    dropdown_hover = -1
+    content = ""
+    email = ""
+    active_field = None
     status_until = 0
 
-    while True:
-        button_rects = [
-            pygame.Rect(SCREEN_WIDTH // 2 - 190, 318, 380, 52),
-            pygame.Rect(SCREEN_WIDTH // 2 - 190, 386, 380, 52),
-        ]
-        hovered = _mouse_selected(button_rects)
-        if hovered is not None:
-            selected = hovered
+    back_rect = pygame.Rect(22, 18, 124, 36)
+    type_rect = pygame.Rect(430, 130, 455, 42)
+    content_rect = pygame.Rect(430, 218, 455, 112)
+    email_rect = pygame.Rect(430, 370, 455, 42)
+    reset_rect = pygame.Rect(430, 432, 170, 48)
+    submit_rect = pygame.Rect(615, 432, 270, 48)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return "quit"
+    dropdown_item_h = 34
+    dropdown_rects = [
+        pygame.Rect(type_rect.x, type_rect.bottom + i * dropdown_item_h,
+                    type_rect.width, dropdown_item_h)
+        for i in range(len(type_keys))
+    ]
 
-            clicked = _clicked_index(event, button_rects)
-            if clicked is not None:
-                selected = clicked
-                activate = True
+    pygame.key.start_text_input()
+    try:
+        while True:
+            mouse_pos = pygame.mouse.get_pos()
+            dropdown_hover = -1
+            if dropdown_open:
+                for i, rect in enumerate(dropdown_rects):
+                    if rect.collidepoint(mouse_pos):
+                        dropdown_hover = i
+                        break
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "quit"
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if dropdown_open:
+                        picked = None
+                        for i, rect in enumerate(dropdown_rects):
+                            if rect.collidepoint(event.pos):
+                                picked = i
+                                break
+                        if picked is not None:
+                            type_index = picked
+                            dropdown_open = False
+                            active_field = None
+                            continue
+                        if type_rect.collidepoint(event.pos):
+                            dropdown_open = False
+                            continue
+                        dropdown_open = False
+
+                    if back_rect.collidepoint(event.pos):
+                        return "back"
+                    if type_rect.collidepoint(event.pos):
+                        dropdown_open = True
+                        active_field = None
+                    elif content_rect.collidepoint(event.pos):
+                        active_field = "content"
+                    elif email_rect.collidepoint(event.pos):
+                        active_field = "email"
+                    elif reset_rect.collidepoint(event.pos):
+                        content = ""
+                        email = ""
+                        type_index = 0
+                        dropdown_open = False
+                        active_field = None
+                    elif submit_rect.collidepoint(event.pos):
+                        try:
+                            webbrowser.open(
+                                _feedback_issue_url(type_keys[type_index], content, email),
+                                new=2,
+                            )
+                        finally:
+                            status_until = pygame.time.get_ticks() + 2600
+                            active_field = None
+                            dropdown_open = False
+                    else:
+                        active_field = None
+
+                if event.type == pygame.TEXTINPUT and active_field:
+                    if active_field == "content" and len(content) < 900:
+                        content += event.text
+                    elif active_field == "email" and len(email) < 100:
+                        email += event.text
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        if dropdown_open:
+                            dropdown_open = False
+                        elif active_field is not None:
+                            active_field = None
+                        else:
+                            return "back"
+                    elif dropdown_open:
+                        if event.key in (pygame.K_UP, pygame.K_w):
+                            type_index = (type_index - 1) % len(type_keys)
+                        elif event.key in (pygame.K_DOWN, pygame.K_s):
+                            type_index = (type_index + 1) % len(type_keys)
+                        elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                            dropdown_open = False
+                        continue
+                    elif event.key == pygame.K_TAB:
+                        active_field = "email" if active_field == "content" else "content"
+                    elif event.key == pygame.K_BACKSPACE:
+                        if active_field == "content":
+                            content = content[:-1]
+                        elif active_field == "email":
+                            email = email[:-1]
+                    elif event.key == pygame.K_RETURN:
+                        if active_field == "content" and len(content) < 900:
+                            content += "\n"
+                        elif active_field == "email":
+                            active_field = None
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and active_field is None:
+                        dropdown_open = True
+
+            _draw_backdrop(screen, (62, 151, 255))
+
+            back_hovered = back_rect.collidepoint(mouse_pos)
+            _draw_menu_button(screen, zh_small, "‹  返回 / BACK", back_rect, back_hovered)
+
+            zh_header = zh_font.render("玩家反馈", True, COLOR_TEXT)
+            slash = en_font.render(" / ", True, (255, 132, 55))
+            en_header = en_font.render("FEEDBACK", True, (162, 184, 220))
+            header_width = zh_header.get_width() + slash.get_width() + en_header.get_width()
+            hx = SCREEN_WIDTH // 2 - header_width // 2
+            screen.blit(zh_header, (hx, 29))
+            screen.blit(slash, (hx + zh_header.get_width(), 29))
+            screen.blit(en_header, (hx + zh_header.get_width() + slash.get_width(), 29))
+
+            panel = pygame.Rect(30, 78, 900, 420)
+            _draw_panel(screen, panel, accent=(62, 151, 255), alpha=225)
+            pygame.draw.line(screen, (52, 76, 112), (382, 100), (382, 473), 1)
+
+            icon_box = pygame.Rect(120, 108, 170, 88)
+            pygame.draw.rect(screen, (18, 34, 58), icon_box, border_radius=18)
+            pygame.draw.rect(screen, (62, 151, 255), icon_box, 2, border_radius=18)
+            pygame.draw.rect(screen, (255, 190, 82), (156, 137, 95, 54), border_radius=7)
+            pygame.draw.line(screen, (126, 82, 28), (157, 138), (203, 169), 3)
+            pygame.draw.line(screen, (126, 82, 28), (250, 138), (203, 169), 3)
+            heart = [(275, 119), (285, 110), (295, 119), (295, 130), (275, 148), (255, 130), (255, 119), (265, 110)]
+            pygame.draw.polygon(screen, (255, 112, 62), heart)
+
+            intro_cn = [
+                "感谢您对《篮界狂潮》的支持！",
+                "如果遇到了问题、有建议或想法，",
+                "欢迎告诉我们。",
+                "您的反馈会帮助游戏变得更好！",
+            ]
+            for i, line in enumerate(intro_cn):
+                surface = zh_small.render(line, True, (226, 234, 247))
+                screen.blit(surface, surface.get_rect(center=(206, 226 + i * 25)))
+
+            pygame.draw.line(screen, (58, 81, 116), (75, 335), (337, 335), 1)
+            intro_en = [
+                "Thank you for supporting HOOP HAVOC!",
+                "Found a bug or have an idea?",
+                "We would love to hear from you.",
+                "Your feedback makes the game better!",
+            ]
+            for i, line in enumerate(intro_en):
+                surface = en_small.render(line, True, (166, 186, 218))
+                screen.blit(surface, surface.get_rect(center=(206, 358 + i * 25)))
+
+            label1 = zh_small.render("问题类型", True, COLOR_TEXT)
+            label1_en = en_small.render(" / Type", True, (166, 186, 218))
+            screen.blit(label1, (430, 104))
+            screen.blit(label1_en, (430 + label1.get_width(), 104))
+            _draw_feedback_input(screen, zh_small, type_rect, type_labels[type_keys[type_index]], "", dropdown_open)
+            pygame.draw.polygon(
+                screen,
+                (255, 132, 55) if dropdown_open else (132, 154, 190),
+                [(type_rect.right - 24, type_rect.centery - 5),
+                 (type_rect.right - 12, type_rect.centery - 5),
+                 (type_rect.right - 18, type_rect.centery + 5)],
+            )
+
+            label2 = zh_small.render("反馈内容", True, COLOR_TEXT)
+            label2_en = en_small.render(" / Content", True, (166, 186, 218))
+            screen.blit(label2, (430, 190))
+            screen.blit(label2_en, (430 + label2.get_width(), 190))
+            _draw_feedback_input(
+                screen,
+                zh_small if get_language() == "zh" else en_small,
+                content_rect,
+                content,
+                "请详细描述您的问题或建议... / Please describe your issue or suggestion...",
+                active_field == "content",
+                multiline=True,
+            )
+
+            label3 = zh_small.render("您的邮箱（可选）", True, COLOR_TEXT)
+            label3_en = en_small.render(" / Email (optional)", True, (166, 186, 218))
+            screen.blit(label3, (430, 344))
+            screen.blit(label3_en, (430 + label3.get_width(), 344))
+            _draw_feedback_input(screen, en_small, email_rect, email, "example@email.com", active_field == "email")
+
+            reset_hover = reset_rect.collidepoint(mouse_pos)
+            submit_hover = submit_rect.collidepoint(mouse_pos)
+            _draw_menu_button(screen, zh_small, "重置 / RESET", reset_rect, reset_hover)
+            _draw_menu_button(screen, zh_small, "提交 / SUBMIT", submit_rect, submit_hover)
+
+            if pygame.time.get_ticks() < status_until:
+                status = zh_small.render("已打开 GitHub 提交页面 / GitHub feedback page opened", True, (111, 224, 164))
             else:
-                activate = False
+                status = zh_small.render("反馈将通过 GitHub Issues 提交给开发者 / Submitted via GitHub Issues", True, (137, 158, 190))
+            screen.blit(status, status.get_rect(center=(SCREEN_WIDTH // 2 + 105, 488)))
 
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
-                    selected = 1 - selected
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    activate = True
-                elif event.key == pygame.K_ESCAPE:
-                    return "back"
+            # Draw dropdown last so it appears above the rest of the form.
+            if dropdown_open:
+                for i, key in enumerate(type_keys):
+                    rect = dropdown_rects[i]
+                    selected = i == type_index
+                    hovered = i == dropdown_hover
+                    fill = (31, 46, 72) if (selected or hovered) else (14, 23, 42)
+                    border = (255, 132, 55) if selected else (62, 82, 117)
+                    pygame.draw.rect(screen, fill, rect)
+                    pygame.draw.rect(screen, border, rect, 1)
+                    label = zh_small.render(type_labels[key], True, COLOR_TEXT if (selected or hovered) else (196, 210, 232))
+                    screen.blit(label, label.get_rect(midleft=(rect.x + 14, rect.centery)))
+                    if selected:
+                        check = en_small.render("✓", True, (255, 132, 55))
+                        screen.blit(check, check.get_rect(midright=(rect.right - 14, rect.centery)))
 
-            if activate:
-                if selected == 0:
-                    try:
-                        webbrowser.open(FEEDBACK_URL, new=2)
-                        status_until = pygame.time.get_ticks() + 2200
-                    except Exception:
-                        status_until = pygame.time.get_ticks() + 2200
-                else:
-                    return "back"
-
-        _draw_backdrop(screen, (62, 151, 255))
-        title = title_font.render(tr("feedback_page.title"), True, COLOR_TEXT)
-        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 72)))
-
-        panel = pygame.Rect(SCREEN_WIDTH // 2 - 310, 118, 620, 170)
-        _draw_panel(screen, panel, accent=(62, 151, 255), alpha=220)
-
-        lines = tr_list("feedback_page.lines")
-        for index, line in enumerate(lines):
-            rendered = small_font.render(line, True, (225, 232, 245))
-            screen.blit(rendered, rendered.get_rect(center=(SCREEN_WIDTH // 2, 157 + index * 32)))
-
-        labels = [tr("feedback_page.open"), tr("common.back")]
-        for index, label in enumerate(labels):
-            _draw_menu_button(screen, font, label, button_rects[index], index == selected)
-
-        if pygame.time.get_ticks() < status_until:
-            status = small_font.render(tr("feedback_page.opened"), True, (111, 224, 164))
-            screen.blit(status, status.get_rect(center=(SCREEN_WIDTH // 2, 468)))
-        else:
-            hint = small_font.render(tr("feedback_page.hint"), True, (170, 185, 210))
-            screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 468)))
-
-        pygame.display.flip()
-        clock.tick(FPS)
-
+            pygame.display.flip()
+            clock.tick(FPS)
+    finally:
+        pygame.key.stop_text_input()
 
 def settings_menu(screen, font, small_font, title_font, settings):
     items = ["language", "fullscreen", "volume", "show_fps", "back"]
