@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "BASKETBALL BRAWL",
-    "subtitle": "ARCADE BASKETBALL SHOWDOWN"
+    "title": "HOOP HAVOC",
+    "subtitle": "ARCADE STREET BASKETBALL"
   },
   "menu": {
     "play": "PLAY",
@@ -92,7 +92,7 @@
     ]
   },
   "select": {
-    "mode_title": "2D Basketball Brawl",
+    "mode_title": "HOOP HAVOC",
     "single": "Press 1  ->  1 Player (vs AI)",
     "local": "2 PLAYER",
     "character_title": "{player}: Choose Your Character",
@@ -134,36 +134,36 @@
     "rebound": "REBOUND!",
     "double_jump": "SHADOW JUMP!"
   },
-  "characters": {
-    "djh": {
-      "name": "DJH",
-      "description": "Explosive first-step scorer.",
-      "ability": "Lightning Dash"
+    "characters": {
+        "djh": {
+            "name": "DJH",
+            "description": "The fastest in the world",
+            "ability": "Dash"
     },
-    "gorilla": {
-      "name": "Gorilla",
-      "description": "Powerful and heavy.",
-      "ability": "Ground Slam"
+        "gorilla": {
+            "name": "BRAX",
+            "description": "Dominator of the paint",
+            "ability": "Ground Slam"
     },
-    "ninja": {
-      "name": "Ninja",
-      "description": "Fast, agile and hard to defend.",
-      "ability": "Shadow Jump"
+        "ninja": {
+            "name": "KAGE",
+            "description": "No one can catch a shadow",
+            "ability": "Shadow Jump"
     }
   },
-  "arenas": {
-    "street": {
-      "name": "Sunset Street",
-      "description": "A warm street court at sunset."
-    },
-    "gym": {
-      "name": "Neon Gym",
-      "description": "An indoor court with bright arena lights."
-    },
-    "rooftop": {
-      "name": "Moon Rooftop",
-      "description": "A windy rooftop above the city."
-    }
+    "arenas": {
+        "street": {
+            "name": "Sunset",
+            "description": "Play in sunset"
+        },
+        "gym": {
+            "name": "Neon District",
+            "description": "A cyber-lit district where legends are bone"
+        },
+        "rooftop": {
+            "name": "Skyline Arena",
+            "description": "Battle above the city's skyline"
+        }
   },
   "training": {
     "title": "TRAINING CAMP",

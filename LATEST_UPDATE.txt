@@ -1,34 +1,23 @@
-Basketball Brawl
-Full Game Rollback Build
+HOOP HAVOC
+Fullscreen and Carousel Position Fix
 
-THIS PACKAGE INCLUDES
+FULLSCREEN
 --------
-- Complete Python source code
-- AI mode
-- Local two-player mode
-- Training Camp
-- Chinese / English localization
-- Mouse and keyboard menu controls
-- Q / ESC back navigation
-- Character selection
-- Arena selection
-- AI difficulty selection
-- Animated Fighter / Samurai / Shinobi models
-- DJH Dash
-- Gorilla Ground Slam
-- Ninja Double Jump
-- Dunk, block, rebound and scoring systems
-- Three court backgrounds
-- Basketball hoop artwork
-- Fullscreen support
+- Forces SDL software rendering before Pygame initializes.
+- Uses FULLSCREEN | SCALED to preserve the 960x540 logical resolution.
+- Removes the plain FULLSCREEN fallback that caused the game to appear only
+  in the upper-left corner with a large black area.
+- Returns safely to windowed mode if scaled fullscreen is unavailable.
 
-ROLLBACK
+MAIN MENU CHARACTERS
 --------
-- Restored the stable main-menu carousel code from before the later
-  transparent-background experiments.
-- Character portrait backgrounds may remain black in this rollback build.
-- No experimental portrait-removal code is included.
+- Moves all three rotating characters upward by 20 pixels.
+- Keeps current character sizes unchanged.
+- Keeps the orange baseline at y=512.
+- Keeps the BRAX/DJH/KAGE name plate unchanged.
+- Character feet no longer touch the orange baseline.
 
-RUN
+FILES TO REPLACE
 --------
-python main.py
+main.py
+ui.py

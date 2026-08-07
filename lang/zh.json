@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "篮球大乱斗",
-    "subtitle": "热血街机篮球对战"
+    "title": "HOOP HAVOC",
+    "subtitle": "篮界狂潮"
   },
   "menu": {
     "play": "开始游戏",
@@ -92,7 +92,7 @@
     ]
   },
   "select": {
-    "mode_title": "2D 篮球大乱斗",
+    "mode_title": "篮界狂潮",
     "single": "按 1  ->  单人模式（对战电脑）",
     "local": "双人",
     "character_title": "{player}：选择角色",
@@ -137,32 +137,32 @@
   "characters": {
     "djh": {
       "name": "DJH",
-      "description": "拥有爆发力十足的第一步。",
+      "description": "超快第一步",
       "ability": "闪电冲刺"
     },
     "gorilla": {
-      "name": "猩猩",
-      "description": "强壮、沉重、对抗出色。",
+      "name": "BRAX",
+      "description": "雄鹰般的对抗",
       "ability": "裂地猛击"
     },
     "ninja": {
-      "name": "忍者",
-      "description": "速度快、灵活且难以防守。",
+      "name": "KAGE",
+      "description": "速度快敏捷高",
       "ability": "影子跳跃"
     }
   },
   "arenas": {
     "street": {
-      "name": "日落街球场",
-      "description": "夕阳下温暖的街头球场。"
+      "name": "日照街头",
+      "description": "夕阳的余晖洒下"
     },
     "gym": {
-      "name": "霓虹球馆",
-      "description": "灯光明亮的室内球馆。"
+      "name": "霓虹街区",
+      "description": "赛博朋克式风格"
     },
     "rooftop": {
-      "name": "月夜天台",
-      "description": "城市上空风声呼啸的天台球场。"
+      "name": "天际球馆",
+      "description": "你们这些警察真奇怪..."
     }
   },
   "training": {

@@ -32,6 +32,9 @@ def _remove_connected_dark_background(image, threshold=72):
     if width <= 0 or height <= 0:
         return surface
 
+    pixels = pygame.PixelArray(surface)
+    surface.unlock()
+
     def is_background(x, y):
         r, g, b, a = surface.get_at((x, y))
         # Fully transparent and nearly transparent pixels are always background.
@@ -110,9 +113,9 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
     """
     character_order = ["ninja", "djh", "gorilla"]
     portrait_sizes = {
-        "ninja": (198, 280),
-        "djh": (200, 282),
-        "gorilla": (210, 294),
+        "ninja": (228, 322),
+        "djh": (230, 324),
+        "gorilla": (242, 340),
     }
     portraits = {
         cid: _load_ui_image(
@@ -124,9 +127,9 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
 
     # Left rear, center front, right rear.
     slots = [
-        {"center": (124, 365), "scale": 0.60, "depth": 0},
-        {"center": (275, 345), "scale": 0.86, "depth": 1},
-        {"center": (426, 365), "scale": 0.60, "depth": 0},
+        {"center": (124, 390), "scale": 0.60, "depth": 0},
+        {"center": (275, 370), "scale": 0.86, "depth": 1},
+        {"center": (426, 390), "scale": 0.60, "depth": 0},
     ]
 
     cycle_seconds = 3.0
@@ -164,11 +167,14 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
         height = max(1, int(portrait.get_height() * scale))
         transformed = pygame.transform.scale(portrait, (width, height))
 
-        rect = transformed.get_rect(midbottom=(int(cx), int(cy + 120)))
+        # Keep every character clearly above the orange baseline.
+        # Rear slots: 390 + 110 = 500; baseline is y=512.
+        # Center slot: 370 + 110 = 480.
+        rect = transformed.get_rect(midbottom=(int(cx), int(cy + 110)))
         screen.blit(transformed, rect)
 
     # Baseline and center-character name.
-    pygame.draw.line(screen, (255, 132, 55), (62, 490), (480, 490), 3)
+    pygame.draw.line(screen, (255, 132, 55), (62, 512), (480, 512), 3)
 
     center_character = character_order[current_index]
     name_surface = small_font.render(
@@ -176,7 +182,7 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
         True,
         COLOR_TEXT,
     )
-    plate = pygame.Rect(202, 456, 146, 28)
+    plate = pygame.Rect(202, 476, 146, 28)
     pygame.draw.rect(screen, (8, 14, 28), plate, border_radius=8)
     pygame.draw.rect(screen, (255, 132, 55), plate, 2, border_radius=8)
     screen.blit(name_surface, name_surface.get_rect(center=plate.center))
@@ -233,8 +239,6 @@ def _load_ui_image(relative_path, size=None):
         if size:
             if is_character:
                 image = pygame.transform.scale(image, size)
-                image = _remove_connected_dark_background(image)
-                image = _crop_transparent_padding(image, padding=0)
             else:
                 image = pygame.transform.smoothscale(image, size)
 

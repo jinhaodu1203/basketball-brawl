@@ -13,18 +13,77 @@ from ui import credits_menu, how_to_play_menu, main_menu, settings_menu
 
 
 def create_screen(fullscreen: bool):
-    """Create the game window.
+    """Create the game display and retry true scaled fullscreen on macOS.
 
-    In fullscreen mode use pygame.SCALED so the game keeps its logical
-    960x540 coordinate system while SDL scales it to the Mac's real display
-    size. This avoids the unused black strip caused by requesting a literal
-    960x540 fullscreen display mode.
+    pygame.SCALED is required because the whole game uses a logical 960x540
+    coordinate system. Plain FULLSCREEN would create a desktop-sized surface
+    and leave the game drawing only in the upper-left corner.
+
+    If the current SDL renderer cannot create scaled fullscreen, restart only
+    the display module and retry with several renderer backends.
     """
-    if fullscreen:
-        flags = pygame.FULLSCREEN | pygame.SCALED
-        return pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+    pygame.event.clear()
 
-    return pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    window_flags = pygame.RESIZABLE
+    fullscreen_flags = pygame.FULLSCREEN | pygame.SCALED
+
+    if not fullscreen:
+        return pygame.display.set_mode(
+            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            window_flags,
+        )
+
+    # First try the renderer selected by SDL/macOS.
+    try:
+        screen = pygame.display.set_mode(
+            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            fullscreen_flags,
+            vsync=0,
+        )
+        print("Fullscreen enabled with SDL default renderer.")
+        return screen
+    except pygame.error as first_error:
+        print(f"Default fullscreen renderer failed: {first_error}")
+
+    # Reinitialize the display and retry renderer backends commonly available
+    # on macOS. The environment variable is read when SDL recreates the
+    # renderer, so display.quit()/display.init() is required here.
+    renderer_candidates = ("metal", "opengl", "software")
+
+    for renderer in renderer_candidates:
+        try:
+            pygame.display.quit()
+            os.environ["SDL_RENDER_DRIVER"] = renderer
+            pygame.display.init()
+
+            screen = pygame.display.set_mode(
+                (SCREEN_WIDTH, SCREEN_HEIGHT),
+                fullscreen_flags,
+                vsync=0,
+            )
+            pygame.display.set_caption("HOOP HAVOC")
+            print(f"Fullscreen enabled with SDL renderer: {renderer}")
+            return screen
+        except pygame.error as error:
+            print(f"Fullscreen renderer '{renderer}' failed: {error}")
+
+    # Clear the renderer override before returning to a window.
+    os.environ.pop("SDL_RENDER_DRIVER", None)
+
+    try:
+        pygame.display.quit()
+        pygame.display.init()
+    except pygame.error:
+        pass
+
+    print(
+        "True scaled fullscreen is unavailable on this SDL/Pygame setup; "
+        "returning to windowed mode."
+    )
+    return pygame.display.set_mode(
+        (SCREEN_WIDTH, SCREEN_HEIGHT),
+        window_flags,
+    )
 
 
 def apply_audio_settings(settings) -> None:
@@ -42,7 +101,7 @@ def main():
 
     settings = load_settings()
     screen = create_screen(settings.fullscreen)
-    pygame.display.set_caption("Basketball Brawl")
+    pygame.display.set_caption("HOOP HAVOC")
 
     set_language(settings.language)
     font, small_font, title_font = create_fonts(settings.language)
@@ -77,6 +136,7 @@ def main():
             apply_audio_settings(settings)
             if settings.fullscreen != old_fullscreen:
                 screen = create_screen(settings.fullscreen)
+                pygame.display.set_caption("HOOP HAVOC")
             if result == "quit":
                 running = False
         elif action == "credits":
