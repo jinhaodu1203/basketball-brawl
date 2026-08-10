@@ -18,6 +18,7 @@ from localization import create_fonts, set_language, get_language, tr, tr_list
 ASSET_ROOT = os.path.join(os.path.dirname(__file__), "assets")
 _IMAGE_CACHE = {}
 _BACKDROP_CACHE = {}
+_SHOWCASE_FRAME_CACHE = {}
 
 
 def _remove_connected_dark_background(image, threshold=72):
@@ -107,87 +108,844 @@ def _smoothstep(value):
     return value * value * (3.0 - 2.0 * value)
 
 
-def _draw_character_carousel(screen, font, small_font, elapsed):
-    """Draw the three-character main-menu carousel without black rectangles.
+def _showcase_frames(character_id, action, target_height=250):
+    """Load and cache one character action sheet as individual UI frames."""
+    config = CHARACTERS.get(character_id, {})
+    frame_count = int(config.get("frame_counts", {}).get(action, 0) or 0)
+    sprite_folder = config.get("sprite_folder", character_id)
+    cache_key = (character_id, sprite_folder, action, frame_count, target_height)
 
-    No Surface.set_alpha(), no full-surface opacity modulation, and no
-    temporary black backing surfaces are used.
+    cached = _SHOWCASE_FRAME_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    if frame_count <= 0:
+        _SHOWCASE_FRAME_CACHE[cache_key] = []
+        return []
+
+    path = os.path.join(ASSET_ROOT, "characters", sprite_folder, f"{action}.png")
+    if not os.path.isfile(path):
+        _SHOWCASE_FRAME_CACHE[cache_key] = []
+        return []
+
+    try:
+        sheet = pygame.image.load(path).convert_alpha()
+        frame_width = sheet.get_width() // frame_count
+        frame_height = sheet.get_height()
+        if frame_width <= 0 or frame_height <= 0:
+            _SHOWCASE_FRAME_CACHE[cache_key] = []
+            return []
+
+        scale = target_height / frame_height
+        target_width = max(1, int(frame_width * scale))
+        frames = []
+
+        for index in range(frame_count):
+            source_rect = pygame.Rect(index * frame_width, 0, frame_width, frame_height)
+            frame = sheet.subsurface(source_rect).copy().convert_alpha()
+            frame = _remove_connected_dark_background(frame)
+            frame = _crop_transparent_padding(frame, padding=1)
+
+            if frame.get_height() <= 0:
+                continue
+            visible_scale = target_height / frame.get_height()
+            width = max(1, int(frame.get_width() * visible_scale))
+            height = max(1, int(frame.get_height() * visible_scale))
+            frame = pygame.transform.scale(frame, (width, height)).convert_alpha()
+            frames.append(frame)
+
+        _SHOWCASE_FRAME_CACHE[cache_key] = frames
+        return frames
+    except (pygame.error, OSError, ValueError):
+        _SHOWCASE_FRAME_CACHE[cache_key] = []
+        return []
+
+
+
+def _showcase_clone_frames(character_id, action="idle", target_height=250):
+    """Load DUKE's real Blood Echo sprite frames for the home showcase."""
+    config = CHARACTERS.get(character_id, {})
+    sprite_folder = config.get("clone_sprite_folder")
+    frame_count = int(config.get("clone_frame_counts", {}).get(action, 0) or 0)
+    if not sprite_folder or frame_count <= 0:
+        return []
+
+    cache_key = ("clone", character_id, sprite_folder, action, frame_count, target_height)
+    cached = _SHOWCASE_FRAME_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    path = os.path.join(ASSET_ROOT, "characters", sprite_folder, f"{action}.png")
+    if not os.path.isfile(path):
+        _SHOWCASE_FRAME_CACHE[cache_key] = []
+        return []
+
+    try:
+        sheet = pygame.image.load(path).convert_alpha()
+        frame_width = sheet.get_width() // frame_count
+        frame_height = sheet.get_height()
+        frames = []
+
+        for index in range(frame_count):
+            source_rect = pygame.Rect(index * frame_width, 0, frame_width, frame_height)
+            frame = sheet.subsurface(source_rect).copy().convert_alpha()
+            frame = _remove_connected_dark_background(frame)
+            frame = _crop_transparent_padding(frame, padding=1)
+            if frame.get_height() <= 0:
+                continue
+
+            visible_scale = target_height / frame.get_height()
+            width = max(1, int(frame.get_width() * visible_scale))
+            height = max(1, int(frame.get_height() * visible_scale))
+            frame = pygame.transform.scale(frame, (width, height)).convert_alpha()
+            frames.append(frame)
+
+        _SHOWCASE_FRAME_CACHE[cache_key] = frames
+        return frames
+    except (pygame.error, OSError, ValueError):
+        _SHOWCASE_FRAME_CACHE[cache_key] = []
+        return []
+
+def _showcase_routine(character_id):
+    """Main-menu personal show: RUN -> REAL SKILL -> RUN.
+
+    Every character enters already running, performs the real gameplay ability,
+    then immediately returns to the run animation.  Because the next character
+    also starts with run, roster transitions visually connect without an idle
+    pose between fighters.
+
+    Tuple:
+        (action_name, loops, seconds_per_frame, horizontal_motion, skill_type)
     """
-    character_order = ["ninja", "djh", "gorilla"]
-    portrait_sizes = {
-        "ninja": (228, 322),
-        "djh": (230, 324),
-        "gorilla": (242, 340),
+    routines = {
+        # DJH: run in -> real Lightning Dash -> keep running.
+        "djh": [
+            ("run",      2, 0.0722, 36, None),
+            ("attack_1", 1, 0.0889, 0, "dash"),
+            ("run",      2, 0.0722, 42, None),
+        ],
+
+        # BRAX: run in -> real Ground Slam -> immediately run again.
+        "gorilla": [
+            ("run",      2, 0.0944, 30, None),
+            ("attack_3", 1, 0.1111, 0, "slam"),
+            ("run",      2, 0.0944, 34, None),
+        ],
+
+        # KAGE: run in -> real Double Jump -> land into running.
+        "ninja": [
+            ("run",  2, 0.0667, 38, None),
+            ("jump", 2, 0.0611, 0, "double_jump"),
+            ("run",  2, 0.0667, 42, None),
+        ],
+
+        # DUKE: run in -> summon Blood Echo -> both continue running.
+        "duke": [
+            ("run",      2, 0.0778, 34, None),
+            ("attack_2", 1, 0.0944, 0, "clone"),
+            # Hold the just-summoned Blood Echo on screen a little longer.
+            ("idle",     2, 0.1200, 0, "clone_hold"),
+            ("run",      2, 0.0778, 40, "clone_run"),
+        ],
     }
-    portraits = {
-        cid: _load_ui_image(
-            f"characters/{cid}/portrait.png",
-            portrait_sizes[cid],
-        )
-        for cid in character_order
-    }
+    return routines.get(character_id, [("run", 3, 0.0778, 36, None)])
 
-    # Left rear, center front, right rear.
-    slots = [
-        {"center": (124, 390), "scale": 0.60, "depth": 0},
-        {"center": (275, 370), "scale": 0.86, "depth": 1},
-        {"center": (426, 390), "scale": 0.60, "depth": 0},
-    ]
+def _showcase_timeline(character_id):
+    """Build a lightweight timeline and return (segments, total_duration)."""
+    segments = []
+    elapsed = 0.0
 
-    cycle_seconds = 3.0
-    transition_seconds = 0.72
-    phase = (elapsed / cycle_seconds) % len(character_order)
-    current_index = int(phase)
-    local_phase = phase - current_index
-    transition = _smoothstep(
-        min(1.0, local_phase / max(0.001, transition_seconds / cycle_seconds))
-    )
+    for item in _showcase_routine(character_id):
+        action, loops, frame_seconds, motion, skill_type = item
 
-    draw_items = []
-    for original_index, cid in enumerate(character_order):
-        current_slot = (original_index - current_index) % len(character_order)
-        next_slot = (current_slot - 1) % len(character_order)
-
-        a = slots[current_slot]
-        b = slots[next_slot]
-        cx = _lerp(a["center"][0], b["center"][0], transition)
-        cy = _lerp(a["center"][1], b["center"][1], transition)
-        scale = _lerp(a["scale"], b["scale"], transition)
-        depth = _lerp(a["depth"], b["depth"], transition)
-
-        draw_items.append((depth, cid, cx, cy, scale))
-
-    # Rear characters first, center character last.
-    draw_items.sort(key=lambda item: item[0])
-
-    for _, cid, cx, cy, scale in draw_items:
-        portrait = portraits.get(cid)
-        if portrait is None:
+        frames = _showcase_frames(character_id, action)
+        if not frames:
             continue
 
-        width = max(1, int(portrait.get_width() * scale))
-        height = max(1, int(portrait.get_height() * scale))
-        transformed = pygame.transform.scale(portrait, (width, height))
+        duration = len(frames) * max(1, loops) * frame_seconds
+        segments.append({
+            "action": action,
+            "frames": frames,
+            "loops": max(1, loops),
+            "frame_seconds": frame_seconds,
+            "motion": motion,
+            "skill_type": skill_type,
+            "start": elapsed,
+            "end": elapsed + duration,
+        })
+        elapsed += duration
 
-        # Keep every character clearly above the orange baseline.
-        # Rear slots: 390 + 110 = 500; baseline is y=512.
-        # Center slot: 370 + 110 = 480.
-        rect = transformed.get_rect(midbottom=(int(cx), int(cy + 110)))
-        screen.blit(transformed, rect)
+    return segments, max(elapsed + 0.08, 1.0)
 
-    # Baseline and center-character name.
-    pygame.draw.line(screen, (255, 132, 55), (62, 512), (480, 512), 3)
+def _draw_character_carousel(screen, font, small_font, elapsed):
+    """Character personal showcase used by the main menu.
 
-    center_character = character_order[current_index]
-    name_surface = small_font.render(
-        tr(f"characters.{center_character}.name"),
+    Only one fighter appears at a time.  The fighter performs a hand-authored
+    sequence assembled from the supplied sprite actions; after the sequence
+    finishes, the next roster member automatically takes the stage.
+    """
+    character_order = list(CHARACTER_ORDER)
+    if not character_order:
+        return
+
+    # Build each routine duration so character switching follows the animation,
+    # rather than using an arbitrary fixed carousel timer.
+    timelines = []
+    cycle_total = 0.0
+    for cid in character_order:
+        segments, duration = _showcase_timeline(cid)
+        timelines.append((cid, segments, duration))
+        cycle_total += duration
+
+    if cycle_total <= 0:
+        return
+
+    cycle_time = elapsed % cycle_total
+    character_id = character_order[0]
+    segments = []
+    routine_duration = 1.0
+    local_time = 0.0
+
+    cursor = 0.0
+    for cid, cid_segments, duration in timelines:
+        if cycle_time < cursor + duration:
+            character_id = cid
+            segments = cid_segments
+            routine_duration = duration
+            local_time = cycle_time - cursor
+            break
+        cursor += duration
+
+    config = CHARACTERS.get(character_id, {})
+    accent = config.get("ui_accent", config.get("color", (255, 132, 55)))
+
+    # Find the action that owns the current moment.
+    active = None
+    for segment in segments:
+        if segment["start"] <= local_time < segment["end"]:
+            active = segment
+            break
+    if active is None and segments:
+        active = segments[-1]
+
+    # Stage baseline stays consistent with the old home menu composition.
+    stage_left = 66
+    stage_right = 492
+    baseline_y = 512
+    pygame.draw.line(screen, accent, (stage_left, baseline_y), (stage_right, baseline_y), 3)
+
+    if active:
+        action_time = max(0.0, local_time - active["start"])
+        frames = active["frames"]
+        frame_index = int(action_time / active["frame_seconds"]) % len(frames)
+        frame = frames[frame_index]
+
+        action_duration = max(0.001, active["end"] - active["start"])
+        action_progress = max(0.0, min(1.0, action_time / action_duration))
+
+        # Ordinary showcase movement.
+        motion = active["motion"]
+        actor_x = 272 + int(motion * (action_progress - 0.5))
+        actor_y = baseline_y - 5
+
+        skill_type = active.get("skill_type")
+
+        # --------------------------------------------------------------
+        # DJH: reproduce the real Dash.
+        # Gameplay uses dash_speed=17 for dash_duration=11 frames, so the
+        # showcase covers roughly the same ~187 px burst.
+        # --------------------------------------------------------------
+        if skill_type == "dash":
+            dash_distance = float(config.get("dash_speed", 17.0)) * float(
+                config.get("dash_duration", 11)
+            )
+            dash_t = _ease_out_cubic(action_progress)
+            actor_x = int(176 + dash_distance * dash_t)
+
+            # Gameplay feedback-style streak particles behind the dash.
+            fx = pygame.Surface((430, 260), pygame.SRCALPHA)
+            local_x = actor_x - 60
+            for i in range(8):
+                trail_x = local_x - i * 18
+                alpha = max(20, 185 - i * 20)
+                pygame.draw.line(
+                    fx,
+                    (225, 240, 255, alpha),
+                    (trail_x, 140 + (i % 3) * 8),
+                    (trail_x - 30, 140 + (i % 3) * 8),
+                    3,
+                )
+            screen.blit(fx, (60, baseline_y - 245))
+
+            # Stronger dash afterimages.
+            for offset, alpha in ((34, 90), (64, 58), (94, 30)):
+                ghost = frame.copy()
+                ghost.set_alpha(alpha)
+                screen.blit(
+                    ghost,
+                    ghost.get_rect(midbottom=(actor_x - offset, actor_y)),
+                )
+
+            # Electric speed shards.
+            electric = pygame.Surface((430, 250), pygame.SRCALPHA)
+            for i in range(14):
+                y = 64 + (i * 15) % 145
+                x = 38 + (i * 29) % 315
+                pygame.draw.line(
+                    electric,
+                    (170, 225, 255, 180),
+                    (x, y),
+                    (x + 17, y - 8),
+                    3,
+                )
+                pygame.draw.line(
+                    electric,
+                    (255, 255, 255, 125),
+                    (x + 17, y - 8),
+                    (x + 30, y + 2),
+                    2,
+                )
+            screen.blit(electric, (62, baseline_y - 240))
+
+
+
+        # --------------------------------------------------------------
+        # BRAX: reproduce Ground Slam.
+        # Gameplay plays attack_3 and fires orange slam feedback at ground.
+        # --------------------------------------------------------------
+        elif skill_type == "slam":
+            actor_x = 272
+
+            # Main impact timing.  The strongest moment happens just after the
+            # attack pose reaches the floor.
+            slam_peak = max(
+                0.0,
+                1.0 - abs(action_progress - 0.52) / 0.20
+            )
+
+            if slam_peak > 0:
+                # ----------------------------------------------------------
+                # 1) Huge layered ground shockwaves
+                # ----------------------------------------------------------
+                impact = pygame.Surface((520, 220), pygame.SRCALPHA)
+                cx, cy = 260, 166
+
+                ring_specs = [
+                    (120, 24, 255, 210, 120, 230, 5),
+                    (180, 34, 255, 155, 65, 195, 4),
+                    (250, 48, 255, 105, 35, 150, 4),
+                    (330, 66, 255, 80, 20, 100, 3),
+                ]
+
+                for (
+                    base_w,
+                    base_h,
+                    r,
+                    g,
+                    b,
+                    alpha_base,
+                    stroke,
+                ) in ring_specs:
+                    width = int(base_w + 130 * slam_peak)
+                    height = int(base_h + 36 * slam_peak)
+                    rect = pygame.Rect(0, 0, width, height)
+                    rect.center = (cx, cy)
+
+                    pygame.draw.ellipse(
+                        impact,
+                        (r, g, b, int(alpha_base * slam_peak)),
+                        rect,
+                        stroke,
+                    )
+
+                # Inner molten glow on the ground.
+                glow_rect = pygame.Rect(0, 0, 180, 38)
+                glow_rect.center = (cx, cy)
+                pygame.draw.ellipse(
+                    impact,
+                    (255, 205, 105, int(150 * slam_peak)),
+                    glow_rect,
+                )
+
+                screen.blit(
+                    impact,
+                    impact.get_rect(midbottom=(actor_x, baseline_y + 18)),
+                )
+
+                # ----------------------------------------------------------
+                # 2) Giant radial ground cracks
+                # ----------------------------------------------------------
+                cracks = pygame.Surface((520, 230), pygame.SRCALPHA)
+                ccx, ccy = 260, 182
+
+                crack_vectors = [
+                    (-210, -28),
+                    (-175, -55),
+                    (-145, -18),
+                    (-110, -76),
+                    (-72, -28),
+                    (-42, -92),
+                    (42, -92),
+                    (72, -28),
+                    (110, -76),
+                    (145, -18),
+                    (175, -55),
+                    (210, -28),
+                ]
+
+                crack_alpha = int(245 * slam_peak)
+
+                for i, (vx, vy) in enumerate(crack_vectors):
+                    mid_x = ccx + int(vx * 0.48)
+                    mid_y = ccy + int(vy * 0.48)
+
+                    # Main crack.
+                    pygame.draw.line(
+                        cracks,
+                        (255, 125, 45, crack_alpha),
+                        (ccx, ccy),
+                        (mid_x, mid_y),
+                        5,
+                    )
+                    pygame.draw.line(
+                        cracks,
+                        (255, 210, 125, int(190 * slam_peak)),
+                        (mid_x, mid_y),
+                        (ccx + vx, ccy + vy),
+                        3,
+                    )
+
+                    # Branch cracks.
+                    branch_dir = -1 if i % 2 == 0 else 1
+                    branch_x = mid_x + branch_dir * (18 + (i % 3) * 8)
+                    branch_y = mid_y - 10 - (i % 4) * 5
+                    pygame.draw.line(
+                        cracks,
+                        (255, 105, 35, int(175 * slam_peak)),
+                        (mid_x, mid_y),
+                        (branch_x, branch_y),
+                        2,
+                    )
+
+                screen.blit(
+                    cracks,
+                    cracks.get_rect(midbottom=(actor_x, baseline_y + 20)),
+                )
+
+                # ----------------------------------------------------------
+                # 3) Massive debris eruption
+                # ----------------------------------------------------------
+                debris = pygame.Surface((520, 300), pygame.SRCALPHA)
+                dcx, dcy = 260, 238
+
+                debris_data = [
+                    (-210, -58, 7),
+                    (-180, -104, 5),
+                    (-145, -138, 8),
+                    (-112, -74, 6),
+                    (-82, -168, 5),
+                    (-48, -118, 8),
+                    (-24, -188, 6),
+                    (24, -180, 7),
+                    (52, -122, 5),
+                    (86, -164, 8),
+                    (116, -78, 6),
+                    (148, -134, 7),
+                    (182, -98, 5),
+                    (216, -60, 8),
+                ]
+
+                for i, (dx, dy, radius) in enumerate(debris_data):
+                    px = dcx + int(dx * slam_peak)
+                    py = dcy + int(dy * slam_peak)
+
+                    # Outer ember.
+                    pygame.draw.circle(
+                        debris,
+                        (255, 120, 40, int(225 * slam_peak)),
+                        (px, py),
+                        radius + 3,
+                    )
+                    # Bright stone center.
+                    pygame.draw.circle(
+                        debris,
+                        (255, 215, 145, int(240 * slam_peak)),
+                        (px, py),
+                        radius,
+                    )
+
+                    # Tiny trailing spark.
+                    pygame.draw.line(
+                        debris,
+                        (255, 170, 70, int(180 * slam_peak)),
+                        (px, py + 2),
+                        (px - int(dx * 0.08), py + 20),
+                        2,
+                    )
+
+                screen.blit(
+                    debris,
+                    debris.get_rect(midbottom=(actor_x, baseline_y + 16)),
+                )
+
+                # ----------------------------------------------------------
+                # 4) Vertical energy eruption / impact pillar
+                # ----------------------------------------------------------
+                pillar = pygame.Surface((300, 360), pygame.SRCALPHA)
+                pcx = 150
+                base_y = 325
+
+                pillar_alpha = int(165 * slam_peak)
+
+                # Wide orange cone.
+                pygame.draw.polygon(
+                    pillar,
+                    (
+                        255,
+                        120,
+                        40,
+                        int(95 * slam_peak),
+                    ),
+                    [
+                        (pcx - 72, base_y),
+                        (pcx - 22, 90),
+                        (pcx + 22, 90),
+                        (pcx + 72, base_y),
+                    ],
+                )
+
+                # Bright inner beam.
+                pygame.draw.polygon(
+                    pillar,
+                    (
+                        255,
+                        225,
+                        155,
+                        pillar_alpha,
+                    ),
+                    [
+                        (pcx - 28, base_y),
+                        (pcx - 8, 54),
+                        (pcx + 8, 54),
+                        (pcx + 28, base_y),
+                    ],
+                )
+
+                # White-hot core.
+                pygame.draw.line(
+                    pillar,
+                    (
+                        255,
+                        250,
+                        220,
+                        int(210 * slam_peak),
+                    ),
+                    (pcx, base_y),
+                    (pcx, 45),
+                    6,
+                )
+
+                screen.blit(
+                    pillar,
+                    pillar.get_rect(midbottom=(actor_x, baseline_y + 8)),
+                )
+
+                # ----------------------------------------------------------
+                # 5) Starburst explosion at center
+                # ----------------------------------------------------------
+                burst = pygame.Surface((420, 320), pygame.SRCALPHA)
+                bx, by = 210, 238
+
+                rays = [
+                    (-170, -24),
+                    (-145, -74),
+                    (-110, -128),
+                    (-52, -168),
+                    (0, -190),
+                    (52, -168),
+                    (110, -128),
+                    (145, -74),
+                    (170, -24),
+                ]
+
+                for vx, vy in rays:
+                    pygame.draw.line(
+                        burst,
+                        (
+                            255,
+                            220,
+                            140,
+                            int(220 * slam_peak),
+                        ),
+                        (bx, by),
+                        (bx + vx, by + vy),
+                        5,
+                    )
+
+                    pygame.draw.line(
+                        burst,
+                        (
+                            255,
+                            255,
+                            235,
+                            int(155 * slam_peak),
+                        ),
+                        (bx, by),
+                        (
+                            bx + int(vx * 0.70),
+                            by + int(vy * 0.70),
+                        ),
+                        2,
+                    )
+
+                # Huge center flash.
+                pygame.draw.circle(
+                    burst,
+                    (
+                        255,
+                        245,
+                        205,
+                        int(205 * slam_peak),
+                    ),
+                    (bx, by),
+                    int(34 + 38 * slam_peak),
+                )
+
+                pygame.draw.circle(
+                    burst,
+                    (
+                        255,
+                        255,
+                        255,
+                        int(225 * slam_peak),
+                    ),
+                    (bx, by),
+                    int(12 + 18 * slam_peak),
+                )
+
+                screen.blit(
+                    burst,
+                    burst.get_rect(midbottom=(actor_x, baseline_y + 12)),
+                )
+
+                # ----------------------------------------------------------
+                # 7) Extra ember particles around BRAX
+                # ----------------------------------------------------------
+                ember_fx = pygame.Surface((420, 300), pygame.SRCALPHA)
+                ecx, ecy = 210, 235
+
+                for i in range(22):
+                    side = -1 if i % 2 == 0 else 1
+                    spread = 24 + (i % 11) * 16
+                    rise = 24 + (i * 17) % 155
+
+                    ex = ecx + side * spread
+                    ey = ecy - rise
+
+                    pygame.draw.circle(
+                        ember_fx,
+                        (
+                            255,
+                            150 + (i % 3) * 25,
+                            55,
+                            int(185 * slam_peak),
+                        ),
+                        (ex, ey),
+                        2 + (i % 3),
+                    )
+
+                screen.blit(
+                    ember_fx,
+                    ember_fx.get_rect(midbottom=(actor_x, baseline_y + 10)),
+                )
+
+        # --------------------------------------------------------------
+        # KAGE: reproduce the real Double Jump.
+        # First half = initial jump; second half = vertical velocity resets
+        # upward, creating the second boost.
+        # --------------------------------------------------------------
+        elif skill_type == "double_jump":
+            actor_x = 272
+
+            if action_progress < 0.50:
+                p = action_progress / 0.50
+                jump_height = 72 * (1.0 - (2.0 * p - 1.0) ** 2)
+                actor_y = baseline_y - 5 - int(jump_height)
+            else:
+                p = (action_progress - 0.50) / 0.50
+                # At p=0 KAGE receives the real second upward impulse.
+                second_height = 106 * (1.0 - (2.0 * p - 1.0) ** 2)
+                actor_y = baseline_y - 54 - int(second_height)
+
+                # Purple burst at the instant of the second jump.
+                if p < 0.30:
+                    burst_strength = 1.0 - p / 0.30
+                    burst = pygame.Surface((220, 120), pygame.SRCALPHA)
+                    for i in range(10):
+                        angle_x = (i - 4.5) * 15
+                        pygame.draw.circle(
+                            burst,
+                            (180, 145, 255, int(200 * burst_strength)),
+                            (110 + int(angle_x), 80 + abs(i - 4) * 3),
+                            3 + i % 2,
+                        )
+                    screen.blit(
+                        burst,
+                        burst.get_rect(center=(actor_x, actor_y + 95)),
+                    )
+
+                    for offset, alpha in ((-42, 75), (42, 48)):
+                        ghost = frame.copy()
+                        ghost.set_alpha(alpha)
+                        screen.blit(
+                            ghost,
+                            ghost.get_rect(
+                                midbottom=(actor_x + offset, actor_y + 18)
+                            ),
+                        )
+
+                    rise_fx = pygame.Surface((240, 220), pygame.SRCALPHA)
+                    for i in range(14):
+                        px = 120 + ((i % 5) - 2) * 22
+                        py = 192 - (i // 5) * 50 - (i % 3) * 13
+                        pygame.draw.line(
+                            rise_fx,
+                            (195, 155, 255, int(185 * burst_strength)),
+                            (px, py + 28),
+                            (px, py - 14),
+                            3,
+                        )
+                    screen.blit(
+                        rise_fx,
+                        rise_fx.get_rect(center=(actor_x, actor_y + 40)),
+                    )
+
+
+
+        actor_rect = frame.get_rect(midbottom=(actor_x, actor_y))
+
+        # --------------------------------------------------------------
+        # DUKE: reproduce the actual clone spawn.
+        # The main body uses attack_2; Blood Echo uses the separate
+        # duke_blood_echo model defined by clone_sprite_folder.
+        # --------------------------------------------------------------
+        if skill_type in ("clone", "clone_hold", "clone_run") and character_id == "duke":
+            clone_action = "run" if skill_type == "clone_run" else "idle"
+            clone_frames = _showcase_clone_frames("duke", clone_action, 238)
+
+            # Some packs may not contain a usable run sheet; gracefully fall
+            # back to idle rather than hiding Blood Echo.
+            if not clone_frames and clone_action != "idle":
+                clone_frames = _showcase_clone_frames("duke", "idle", 238)
+
+            if clone_frames:
+                clone_frame_seconds = 0.0778 if clone_action == "run" else 0.1167
+                clone_index = int(action_time / clone_frame_seconds) % len(clone_frames)
+                clone_frame = clone_frames[clone_index]
+
+                # Match the actual game clone spacing: approximately 105 px.
+                clone_offset = -105
+
+                if skill_type == "clone":
+                    # Spawn outward from DUKE during the summon animation.
+                    spawn_t = min(1.0, action_progress * 3.2)
+                    clone_x = int(
+                        actor_x + clone_offset * _ease_out_cubic(spawn_t)
+                    )
+
+                    # Red spawn particles.
+                    if spawn_t < 1.0:
+                        spawn_fx = pygame.Surface((180, 250), pygame.SRCALPHA)
+                        alpha = int(230 * (1.0 - spawn_t))
+                        for i in range(12):
+                            px = 90 + ((i % 4) - 1.5) * 16
+                            py = 150 - (i // 4) * 24
+                            pygame.draw.circle(
+                                spawn_fx,
+                                (230, 48, 68, alpha),
+                                (int(px), int(py)),
+                                4,
+                            )
+                        screen.blit(
+                            spawn_fx,
+                            spawn_fx.get_rect(
+                                center=(clone_x, actor_y - 95)
+                            ),
+                        )
+                elif skill_type == "clone_hold":
+                    # Freeze the composition briefly so the Echo reveal reads clearly.
+                    clone_x = actor_x + clone_offset
+                else:
+                    # After the hold, DUKE and Blood Echo both keep running.
+                    clone_x = actor_x + clone_offset
+
+                clone_rect = clone_frame.get_rect(
+                    midbottom=(clone_x, actor_y)
+                )
+
+                if skill_type == "clone":
+                    glow = clone_frame.copy()
+                    glow.fill(
+                        (150, 20, 36, 0),
+                        special_flags=pygame.BLEND_RGBA_ADD,
+                    )
+                    glow.set_alpha(105)
+                    for gx in (-6, 6):
+                        for gy in (-4, 4):
+                            screen.blit(
+                                glow,
+                                glow.get_rect(
+                                    midbottom=(clone_x + gx, actor_y + gy)
+                                ),
+                            )
+
+                screen.blit(clone_frame, clone_rect)
+
+                if skill_type == "clone":
+                    ability_text = tr("characters.duke.ability")
+                    clone_label = small_font.render(
+                        ability_text,
+                        True,
+                        (230, 48, 68),
+                    )
+                    screen.blit(
+                        clone_label,
+                        clone_label.get_rect(center=(270, 408)),
+                    )
+        screen.blit(frame, actor_rect)
+
+    # Character identity plate.
+    display_name = tr(f"characters.{character_id}.name")
+    name_surface = font.render(display_name, True, COLOR_TEXT)
+    name_plate = pygame.Rect(176, 458, 190, 40)
+    pygame.draw.rect(screen, (8, 14, 28), name_plate, border_radius=10)
+    pygame.draw.rect(screen, accent, name_plate, 2, border_radius=10)
+    screen.blit(name_surface, name_surface.get_rect(center=name_plate.center))
+
+    # Ability subtitle gives each solo its own identity without cluttering the menu.
+    ability_surface = small_font.render(
+        tr(f"characters.{character_id}.ability"),
         True,
-        COLOR_TEXT,
+        accent,
     )
-    plate = pygame.Rect(202, 476, 146, 28)
-    pygame.draw.rect(screen, (8, 14, 28), plate, border_radius=8)
-    pygame.draw.rect(screen, (255, 132, 55), plate, 2, border_radius=8)
-    screen.blit(name_surface, name_surface.get_rect(center=plate.center))
+    ability_rect = ability_surface.get_rect(center=(271, 435))
+    screen.blit(ability_surface, ability_rect)
+
+    # Minimal progress markers: one dot per roster member; active one uses the
+    # character's accent color.  This makes the automatic order easy to read.
+    dot_y = 522
+    dot_gap = 20
+    total_dot_width = (len(character_order) - 1) * dot_gap
+    dot_start_x = 278 - total_dot_width // 2
+    for index, cid in enumerate(character_order):
+        dot_x = dot_start_x + index * dot_gap
+        if cid == character_id:
+            dot_color = accent
+            radius = 5
+        else:
+            dot_color = (75, 91, 120)
+            radius = 3
+        pygame.draw.circle(screen, dot_color, (dot_x, dot_y), radius)
 
 def _crop_transparent_padding(image, alpha_threshold=8, padding=2):
     """Crop fully transparent padding around a portrait.
@@ -508,6 +1266,11 @@ def _info_page(screen, title_font, small_font, title, sections, footer=None):
 
 
 def how_to_play_menu(screen, font, small_font, title_font):
+    """游戏说明：四个独立可滚动信息格。
+
+    鼠标放在哪一格上滚轮，就只滚动那一格。
+    也可以单击某一格后使用 ↑/↓、W/S、PageUp/PageDown。
+    """
     sections = [
         (tr("how.p1"), tr_list("how.p1_lines")),
         (tr("how.p2"), tr_list("how.p2_lines")),
@@ -515,20 +1278,139 @@ def how_to_play_menu(screen, font, small_font, title_font):
         (tr("how.general"), tr_list("how.general_lines")),
     ]
     clock = pygame.time.Clock()
+    scroll_offsets = [0, 0, 0, 0]
+    active_section = 0
+
+    panel = pygame.Rect(78, 104, SCREEN_WIDTH - 156, SCREEN_HEIGHT - 164)
+    gap = 12
+    cell_width = (panel.width - gap) // 2
+    cell_height = (panel.height - gap) // 2
+    cells = [
+        pygame.Rect(panel.x, panel.y, cell_width, cell_height),
+        pygame.Rect(panel.x + cell_width + gap, panel.y, cell_width, cell_height),
+        pygame.Rect(panel.x, panel.y + cell_height + gap, cell_width, cell_height),
+        pygame.Rect(panel.x + cell_width + gap, panel.y + cell_height + gap, cell_width, cell_height),
+    ]
+
+    line_height = max(18, small_font.get_linesize() - 3)
+    heading_height = line_height + 18
+    text_pad_x = 22
+    text_pad_bottom = 14
+
+    def prepared_lines(index):
+        max_width = cells[index].width - text_pad_x * 2 - 14
+        wrapped = []
+        for raw in sections[index][1]:
+            wrapped.extend(_wrap_text(small_font, raw, max_width))
+        return wrapped
+
+    def max_scroll(index):
+        content_height = len(prepared_lines(index)) * line_height
+        visible_height = cells[index].height - heading_height - text_pad_bottom
+        return max(0, content_height - visible_height)
+
+    def clamp_scroll(index):
+        scroll_offsets[index] = max(0, min(scroll_offsets[index], max_scroll(index)))
+
     while True:
+        mouse_pos = pygame.mouse.get_pos()
+        hovered = next((i for i, rect in enumerate(cells) if rect.collidepoint(mouse_pos)), None)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
-            if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
-                return "back"
-        _info_page(
-            screen,
-            title_font,
-            small_font,
-            tr("how.title"),
-            sections,
-            footer=tr("common.footer_back"),
-        )
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1 and hovered is not None:
+                    active_section = hovered
+                elif event.button in (4, 5):
+                    target = hovered if hovered is not None else active_section
+                    scroll_offsets[target] += -line_height * 3 if event.button == 4 else line_height * 3
+                    clamp_scroll(target)
+
+            if event.type == pygame.MOUSEWHEEL:
+                target = hovered if hovered is not None else active_section
+                scroll_offsets[target] -= event.y * line_height * 3
+                clamp_scroll(target)
+
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                    return "back"
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    scroll_offsets[active_section] -= line_height
+                    clamp_scroll(active_section)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    scroll_offsets[active_section] += line_height
+                    clamp_scroll(active_section)
+                elif event.key == pygame.K_PAGEUP:
+                    scroll_offsets[active_section] -= cells[active_section].height // 2
+                    clamp_scroll(active_section)
+                elif event.key == pygame.K_PAGEDOWN:
+                    scroll_offsets[active_section] += cells[active_section].height // 2
+                    clamp_scroll(active_section)
+                elif event.key == pygame.K_HOME:
+                    scroll_offsets[active_section] = 0
+                elif event.key == pygame.K_END:
+                    scroll_offsets[active_section] = max_scroll(active_section)
+
+        _draw_backdrop(screen, (62, 151, 255))
+        title_surface = title_font.render(tr("how.title"), True, COLOR_TEXT)
+        screen.blit(title_surface, title_surface.get_rect(center=(SCREEN_WIDTH // 2, 62)))
+
+        for index, rect in enumerate(cells):
+            is_active = index == active_section
+            is_hovered = index == hovered
+            accent = (255, 132, 55) if is_active else ((88, 181, 255) if is_hovered else (62, 151, 255))
+            _draw_panel(screen, rect, accent=accent, alpha=232)
+
+            heading = small_font.render(sections[index][0], True, accent)
+            screen.blit(heading, (rect.x + text_pad_x, rect.y + 14))
+
+            # 独立内容视口：所有正文只会绘制在自己的格子内。
+            content_rect = pygame.Rect(
+                rect.x + text_pad_x,
+                rect.y + heading_height,
+                rect.width - text_pad_x * 2 - 10,
+                rect.height - heading_height - text_pad_bottom,
+            )
+            old_clip = screen.get_clip()
+            screen.set_clip(content_rect)
+
+            y = content_rect.y - scroll_offsets[index]
+            for line in prepared_lines(index):
+                surface = small_font.render(line, True, (225, 230, 242))
+                screen.blit(surface, (content_rect.x, y))
+                y += line_height
+
+            screen.set_clip(old_clip)
+
+            # 右侧滚动条。内容能滚动时才显示滑块。
+            maximum = max_scroll(index)
+            if maximum > 0:
+                track = pygame.Rect(rect.right - 10, content_rect.y, 4, content_rect.height)
+                pygame.draw.rect(screen, (39, 55, 82), track, border_radius=2)
+
+                total_height = content_rect.height + maximum
+                thumb_height = max(24, int(content_rect.height * (content_rect.height / total_height)))
+                travel = max(1, track.height - thumb_height)
+                ratio = scroll_offsets[index] / maximum if maximum else 0
+                thumb = pygame.Rect(track.x, track.y + int(travel * ratio), track.width, thumb_height)
+                pygame.draw.rect(screen, accent, thumb, border_radius=2)
+
+                # 小提示箭头，提醒玩家这一格还有更多内容。
+                if scroll_offsets[index] < maximum:
+                    arrow_y = rect.bottom - 9
+                    pygame.draw.polygon(
+                        screen,
+                        accent,
+                        [(rect.centerx - 5, arrow_y - 4), (rect.centerx + 5, arrow_y - 4), (rect.centerx, arrow_y + 2)],
+                    )
+
+        footer_text = tr("common.footer_back")
+        scroll_hint = "滚轮 / ↑↓：滚动当前格" if get_language() == "zh" else "Wheel / ↑↓: scroll selected panel"
+        footer = small_font.render(f"{scroll_hint}    •    {footer_text}", True, (170, 180, 205))
+        screen.blit(footer, footer.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 22)))
+
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -719,11 +1601,17 @@ def feedback_menu(screen, font, small_font, title_font):
                     else:
                         active_field = None
 
+                # 中文输入依靠 pygame.TEXTINPUT，不使用 KEYDOWN 拼接字符。
+                # 这样可以兼容系统输入法（拼音/日文/韩文等）。
                 if event.type == pygame.TEXTINPUT and active_field:
                     if active_field == "content" and len(content) < 900:
                         content += event.text
                     elif active_field == "email" and len(email) < 100:
                         email += event.text
+
+                # 输入法组合阶段不要重复写入。
+                if event.type == pygame.TEXTEDITING:
+                    continue
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -1061,60 +1949,80 @@ def select_mode(screen, font, title_font):
 
 
 def select_character(screen, font, small_font, title_font, player_label):
+    """Scalable focus-carousel character select.
+
+    One character is featured in the center with full-size art and complete
+    information. Other characters remain as side previews, so the layout keeps
+    working even when the roster grows beyond four characters.
+    """
     clock = pygame.time.Clock()
     selected = 0
-    card_width, card_height, gap = 250, 360, 25
-    total_width = len(CHARACTER_ORDER) * card_width + (len(CHARACTER_ORDER) - 1) * gap
-    start_x = SCREEN_WIDTH // 2 - total_width // 2
-    card_y = 118
+    transition_from = 0
+    transition_started = 0
+    transition_duration = 220
+
+    def move_selection(delta):
+        nonlocal selected, transition_from, transition_started
+        if not CHARACTER_ORDER:
+            return
+        transition_from = selected
+        selected = (selected + delta) % len(CHARACTER_ORDER)
+        transition_started = pygame.time.get_ticks()
 
     while True:
-        rects = [
-            pygame.Rect(
-                start_x + i * (card_width + gap),
-                card_y,
-                card_width,
-                card_height,
-            )
-            for i in range(len(CHARACTER_ORDER))
-        ]
+        if not CHARACTER_ORDER:
+            return "back"
+
         back_rect = pygame.Rect(18, 18, 150, 38)
 
-        hovered = _mouse_selected(rects)
-        if hovered is not None:
-            selected = hovered
+        # Side preview hit areas.
+        left_preview_rect = pygame.Rect(34, 150, 210, 300)
+        right_preview_rect = pygame.Rect(SCREEN_WIDTH - 244, 150, 210, 300)
+        center_card = pygame.Rect(250, 118, 460, 366)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-            if (
-                event.type == pygame.MOUSEBUTTONDOWN
-                and event.button == 1
-                and back_rect.collidepoint(event.pos)
-            ):
-                return "back"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    if back_rect.collidepoint(event.pos):
+                        return "back"
+                    if center_card.collidepoint(event.pos):
+                        return CHARACTER_ORDER[selected]
+                    if left_preview_rect.collidepoint(event.pos):
+                        move_selection(-1)
+                    elif right_preview_rect.collidepoint(event.pos):
+                        move_selection(1)
+                elif event.button == 4:
+                    move_selection(-1)
+                elif event.button == 5:
+                    move_selection(1)
 
-            clicked = _clicked_index(event, rects)
-            if clicked is not None:
-                return CHARACTER_ORDER[clicked]
+            if event.type == pygame.MOUSEWHEEL:
+                if event.y > 0:
+                    move_selection(-1)
+                elif event.y < 0:
+                    move_selection(1)
 
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_q, pygame.K_ESCAPE):
                     return "back"
                 if event.key in (pygame.K_LEFT, pygame.K_a):
-                    selected = (selected - 1) % len(CHARACTER_ORDER)
+                    move_selection(-1)
                 elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                    selected = (selected + 1) % len(CHARACTER_ORDER)
+                    move_selection(1)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     return CHARACTER_ORDER[selected]
-                elif event.key in (pygame.K_1, pygame.K_KP1):
+                elif event.key in (pygame.K_1, pygame.K_KP1) and len(CHARACTER_ORDER) >= 1:
                     return CHARACTER_ORDER[0]
-                elif event.key in (pygame.K_2, pygame.K_KP2):
+                elif event.key in (pygame.K_2, pygame.K_KP2) and len(CHARACTER_ORDER) >= 2:
                     return CHARACTER_ORDER[1]
-                elif event.key in (pygame.K_3, pygame.K_KP3):
+                elif event.key in (pygame.K_3, pygame.K_KP3) and len(CHARACTER_ORDER) >= 3:
                     return CHARACTER_ORDER[2]
+                elif event.key in (pygame.K_4, pygame.K_KP4) and len(CHARACTER_ORDER) >= 4:
+                    return CHARACTER_ORDER[3]
 
         _draw_backdrop(screen, (146, 83, 255))
         _draw_back_button(screen, font)
@@ -1124,102 +2032,209 @@ def select_character(screen, font, small_font, title_font, player_label):
             True,
             COLOR_TEXT,
         )
-        hint = small_font.render(tr("common.select_hint"), True, COLOR_TEXT)
-        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 62)))
-        screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 105)))
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 54)))
 
-        for index, character_id in enumerate(CHARACTER_ORDER):
-            config = CHARACTERS[character_id]
-            card_rect = rects[index]
-            card_x, local_card_y = card_rect.x, card_rect.y
-            accent = config.get("ui_accent", config["color"])
+        hint_text = (
+            "A / D  •  ← / →  •  鼠标滚轮切换  •  ENTER 确认"
+            if get_language() == "zh"
+            else "A / D  •  ← / →  •  Mouse wheel to switch  •  ENTER to confirm"
+        )
+        hint = small_font.render(hint_text, True, (180, 194, 219))
+        screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 90)))
+
+        now = pygame.time.get_ticks()
+        if transition_started:
+            t = min(1.0, (now - transition_started) / max(1, transition_duration))
+            t = _smoothstep(t)
+        else:
+            t = 1.0
+
+        current_id = CHARACTER_ORDER[selected]
+        current = CHARACTERS[current_id]
+        accent = current.get("ui_accent", current["color"])
+
+        # ---- Side previews ----
+        roster_count = len(CHARACTER_ORDER)
+        left_index = (selected - 1) % roster_count
+        right_index = (selected + 1) % roster_count
+
+        for side, index, rect in (
+            ("left", left_index, left_preview_rect),
+            ("right", right_index, right_preview_rect),
+        ):
+            cid = CHARACTER_ORDER[index]
+            cfg = CHARACTERS[cid]
+            side_accent = cfg.get("ui_accent", cfg["color"])
+
+            hovered = rect.collidepoint(pygame.mouse.get_pos())
+            preview_panel = rect.inflate(-18, -22)
             _draw_panel(
                 screen,
-                card_rect,
-                index == selected,
-                accent=accent,
-                alpha=230 if index == selected else 205,
+                preview_panel,
+                hovered,
+                accent=side_accent,
+                alpha=150 if not hovered else 190,
+                radius=18,
             )
 
-            pygame.draw.circle(screen, accent, (card_x + 25, local_card_y + 25), 15)
-            number = small_font.render(str(index + 1), True, (255, 255, 255))
-            screen.blit(number, number.get_rect(center=(card_x + 25, local_card_y + 25)))
-
             preview = _load_ui_image(
-                f"characters/{character_id}/portrait.png",
-                (132, 176),
+                f"characters/{cid}/portrait.png",
+                (155, 215),
             )
             if preview:
                 screen.blit(
                     preview,
-                    preview.get_rect(midtop=(card_rect.centerx, local_card_y + 12)),
+                    preview.get_rect(midbottom=(preview_panel.centerx, preview_panel.bottom - 42)),
+                )
+
+            name = font.render(
+                tr(f"characters.{cid}.name"),
+                True,
+                (205, 215, 235),
+            )
+            screen.blit(name, name.get_rect(center=(preview_panel.centerx, preview_panel.bottom - 24)))
+
+            arrow_color = side_accent if hovered else (128, 148, 180)
+            cy = rect.centery
+            if side == "left":
+                pygame.draw.polygon(
+                    screen,
+                    arrow_color,
+                    [(rect.x + 4, cy), (rect.x + 18, cy - 14), (rect.x + 18, cy + 14)],
                 )
             else:
-                pygame.draw.circle(
+                pygame.draw.polygon(
                     screen,
-                    accent,
-                    (card_rect.centerx, local_card_y + 80),
-                    45,
+                    arrow_color,
+                    [(rect.right - 4, cy), (rect.right - 18, cy - 14), (rect.right - 18, cy + 14)],
                 )
 
-            name_surface = font.render(
-                tr(f"characters.{character_id}.name"),
-                True,
-                COLOR_TEXT,
-            )
-            ability_surface = small_font.render(
-                tr(f"characters.{character_id}.ability"),
-                True,
-                accent,
-            )
-            description_surface = small_font.render(
-                tr(f"characters.{character_id}.description"),
-                True,
-                (210, 219, 235),
-            )
-            ratings = config.get("ratings", {})
-            rating_row_1 = small_font.render(
-                f"SPD {ratings.get('speed', 3)}/5    3PT {ratings.get('three', 3)}/5",
-                True,
-                (158, 177, 207),
-            )
-            rating_row_2 = small_font.render(
-                f"DNK {ratings.get('dunk', 3)}/5    DEF {ratings.get('defense', 3)}/5",
-                True,
-                (158, 177, 207),
+        # ---- Main featured card ----
+        _draw_panel(
+            screen,
+            center_card,
+            True,
+            accent=accent,
+            alpha=242,
+            radius=22,
+        )
+
+        # Left half: large portrait, shown cleanly without a glow circle.
+        art_rect = pygame.Rect(center_card.x + 18, center_card.y + 18, 205, center_card.height - 36)
+
+        portrait = _load_ui_image(
+            f"characters/{current_id}/portrait.png",
+            (190, 270),
+        )
+        if portrait:
+            screen.blit(
+                portrait,
+                portrait.get_rect(midbottom=(art_rect.centerx, art_rect.bottom - 22)),
             )
 
-            screen.blit(
-                name_surface,
-                name_surface.get_rect(center=(card_rect.centerx, local_card_y + 206)),
-            )
-            screen.blit(
-                ability_surface,
-                ability_surface.get_rect(center=(card_rect.centerx, local_card_y + 242)),
-            )
-            screen.blit(
-                description_surface,
-                description_surface.get_rect(center=(card_rect.centerx, local_card_y + 278)),
-            )
-            pygame.draw.line(
-                screen,
-                accent,
-                (card_x + 25, local_card_y + 305),
-                (card_x + card_width - 25, local_card_y + 305),
-                1,
-            )
-            screen.blit(
-                rating_row_1,
-                rating_row_1.get_rect(center=(card_rect.centerx, local_card_y + 325)),
-            )
-            screen.blit(
-                rating_row_2,
-                rating_row_2.get_rect(center=(card_rect.centerx, local_card_y + 346)),
-            )
+        # Roster counter.
+        counter = small_font.render(
+            f"{selected + 1:02d} / {roster_count:02d}",
+            True,
+            accent,
+        )
+        screen.blit(counter, (center_card.x + 22, center_card.y + 18))
+
+        # Right half: readable full information.
+        info_x = center_card.x + 238
+        info_width = center_card.width - 258
+
+        name_surface = title_font.render(
+            tr(f"characters.{current_id}.name"),
+            True,
+            COLOR_TEXT,
+        )
+        screen.blit(name_surface, (info_x, center_card.y + 34))
+
+        ability_label = (
+            "专属技能" if get_language() == "zh" else "ABILITY"
+        )
+        ability_label_surface = small_font.render(
+            ability_label,
+            True,
+            (135, 153, 185),
+        )
+        screen.blit(ability_label_surface, (info_x, center_card.y + 94))
+
+        ability_lines = _wrap_text(
+            font,
+            tr(f"characters.{current_id}.ability"),
+            info_width,
+        )
+        y = center_card.y + 118
+        for line in ability_lines[:3]:
+            surface = font.render(line, True, accent)
+            screen.blit(surface, (info_x, y))
+            y += font.get_linesize()
+
+        desc_y = max(y + 12, center_card.y + 186)
+        desc_label = (
+            "角色介绍" if get_language() == "zh" else "PROFILE"
+        )
+        desc_label_surface = small_font.render(
+            desc_label,
+            True,
+            (135, 153, 185),
+        )
+        screen.blit(desc_label_surface, (info_x, desc_y))
+
+        desc_y += 24
+        description_lines = _wrap_text(
+            small_font,
+            tr(f"characters.{current_id}.description"),
+            info_width,
+        )
+        for line in description_lines[:4]:
+            surface = small_font.render(line, True, (218, 225, 239))
+            screen.blit(surface, (info_x, desc_y))
+            desc_y += small_font.get_linesize()
+
+        # Rating bars.
+        ratings = current.get("ratings", {})
+        rating_y = center_card.bottom - 104
+        rating_specs = [
+            ("SPD", ratings.get("speed", 3)),
+            ("3PT", ratings.get("three", 3)),
+            ("DNK", ratings.get("dunk", 3)),
+            ("DEF", ratings.get("defense", 3)),
+        ]
+
+        for idx, (label, value) in enumerate(rating_specs):
+            row_y = rating_y + idx * 22
+            lab = small_font.render(label, True, (165, 183, 211))
+            screen.blit(lab, (info_x, row_y))
+
+            bar_x = info_x + 42
+            for pip in range(5):
+                pip_rect = pygame.Rect(bar_x + pip * 24, row_y + 4, 18, 8)
+                if pip < value:
+                    pygame.draw.rect(screen, accent, pip_rect, border_radius=4)
+                else:
+                    pygame.draw.rect(screen, (47, 61, 88), pip_rect, border_radius=4)
+
+        # Confirm button.
+        confirm_rect = pygame.Rect(center_card.centerx - 92, center_card.bottom + 10, 184, 38)
+        confirm_hovered = confirm_rect.collidepoint(pygame.mouse.get_pos())
+        _draw_menu_button(
+            screen,
+            small_font,
+            tr("common.confirm") if tr("common.confirm") != "common.confirm" else ("确认选择" if get_language() == "zh" else "CONFIRM"),
+            confirm_rect,
+            confirm_hovered,
+        )
+
+        # Mouse click on explicit confirm button.
+        if pygame.mouse.get_pressed()[0] and confirm_hovered:
+            pygame.time.wait(90)
+            return CHARACTER_ORDER[selected]
 
         pygame.display.flip()
         clock.tick(FPS)
-
 
 def select_arena(screen, font, small_font, title_font):
     clock = pygame.time.Clock()
