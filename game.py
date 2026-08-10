@@ -2,6 +2,8 @@
 
 import os
 import sys
+import math
+import random
 
 import pygame
 
@@ -9,6 +11,7 @@ from constants import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
     FPS,
+    PLAYER_WIDTH,
     PLAYER_HEIGHT,
     AI_DIFFICULTY_LABELS,
     WINNING_SCORE,
@@ -39,6 +42,7 @@ PLAYER1_CONTROLS = {
     "action": pygame.K_SPACE,
     "steal": pygame.K_s,
     "ability": pygame.K_LSHIFT,
+    "pass": pygame.K_f,
 }
 
 PLAYER2_CONTROLS = {
@@ -48,6 +52,7 @@ PLAYER2_CONTROLS = {
     "action": pygame.K_RETURN,
     "steal": pygame.K_DOWN,
     "ability": pygame.K_RCTRL,
+    "pass": pygame.K_RSHIFT,
 }
 
 
@@ -65,7 +70,261 @@ def reset_round(player1, player2, ball, arena):
     ball.last_shooter = None
     ball.shot_distance = 0
     ball.rebound_available = False
+    ball.clear_pass()
 
+
+
+def _create_duke_clone(owner, assets_dir):
+    """Create Duke's temporary teammate. The clone is a real Player so it can receive, hold and shoot the ball."""
+    config = dict(owner.character_config)
+    offset = -105 if owner.facing_right else 105
+    clone_x = max(0, min(SCREEN_WIDTH - PLAYER_WIDTH, owner.x + offset))
+    clone_config = dict(config)
+    clone_config["frame_counts"] = config.get("clone_frame_counts", config.get("frame_counts"))
+    clone = Player(
+        clone_x,
+        owner.arena["ground_y"] - PLAYER_HEIGHT,
+        config.get("color", owner.color),
+        owner.controls,
+        facing_right=owner.facing_right,
+        name=f"{owner.character_name} BLOOD ECHO",
+        sprite_folder=os.path.join(
+            assets_dir,
+            "characters",
+            config.get("clone_sprite_folder", config.get("sprite_folder", "duke")),
+        ),
+        frame_counts=clone_config.get("frame_counts"),
+        character_config=clone_config,
+        arena=owner.arena,
+    )
+    clone.is_clone = True
+    clone.clone_owner = owner
+    clone.clone_lifetime = int(config.get("clone_duration", 420))
+    clone.ability_type = "none"
+    clone.ability_cooldown_max = 0
+    clone.ability_cooldown_timer = 0
+    clone.pass_target = owner
+    owner.pass_target = clone
+
+    if owner.ai_controlled:
+        difficulty = str(getattr(owner, "ai_difficulty", "normal")).lower()
+        clone.ai_controlled = True
+        clone.ai_difficulty = difficulty
+        clone.apply_ai_difficulty(difficulty)
+
+        # Give the summon animation a moment before the first tactical pass.
+        owner.ai_duke_pass_cooldown = 18 if difficulty == "hard" else 28
+        owner.ai_duke_pass_decision_timer = 10
+
+    return clone
+
+
+def _support_clone(clone, active, opponent):
+    """Very small off-ball brain: create a passing lane without independently shooting or stealing."""
+    if clone is None or active is clone:
+        return
+    spacing = float(clone.character_config.get("clone_support_distance", 165))
+    rim_x = clone.arena["rim_x"]
+    # Prefer the opposite side of the ball handler relative to the hoop.
+    side = -1 if active.x < rim_x else 1
+    desired_x = active.x + side * spacing
+    desired_x = max(28, min(SCREEN_WIDTH - PLAYER_WIDTH - 28, desired_x))
+    delta = desired_x - clone.x
+    direction = 0 if abs(delta) < 18 else (1 if delta > 0 else -1)
+    clone._apply_horizontal_move(direction)
+    # Face the ball handler so the catch animation and dribble hand look natural.
+    clone.facing_right = active.center()[0] >= clone.center()[0]
+
+
+
+def _distance_to_pass_lane(point, start, end):
+    """Return the shortest distance from point to the pass segment."""
+    px, py = point
+    ax, ay = start
+    bx, by = end
+    dx = bx - ax
+    dy = by - ay
+    length_sq = dx * dx + dy * dy
+    if length_sq <= 0.0001:
+        return math.hypot(px - ax, py - ay)
+
+    t = ((px - ax) * dx + (py - ay) * dy) / length_sq
+    t = max(0.0, min(1.0, t))
+    closest_x = ax + dx * t
+    closest_y = ay + dy * t
+    return math.hypot(px - closest_x, py - closest_y)
+
+
+def _ai_duke_try_tactical_pass(owner, active, teammate, opponent, ball):
+    """Harder DUKE AI: use Blood Echo as a real passing partner.
+
+    The decision is intentionally throttled so DUKE does not ping-pong the
+    ball every frame. Hard AI reads pressure, teammate openness, progress
+    toward the rim, and interception-lane safety before passing.
+    """
+    if teammate is None or active is None:
+        return False
+    if ball.state != "held" or ball.holder is not active:
+        return False
+    if active not in (owner, owner.pass_target) and not getattr(active, "is_clone", False):
+        return False
+
+    difficulty = str(getattr(owner, "ai_difficulty", "normal")).lower()
+
+    # Persistent team-level timers live on the real DUKE body.
+    cooldown = int(getattr(owner, "ai_duke_pass_cooldown", 0))
+    decision_timer = int(getattr(owner, "ai_duke_pass_decision_timer", 0))
+
+    if cooldown > 0:
+        owner.ai_duke_pass_cooldown = cooldown - 1
+        return False
+
+    if decision_timer > 0:
+        owner.ai_duke_pass_decision_timer = decision_timer - 1
+        return False
+
+    # Re-evaluate only every few tenths of a second.
+    if difficulty == "hard":
+        owner.ai_duke_pass_decision_timer = random.randint(14, 24)
+    elif difficulty == "normal":
+        owner.ai_duke_pass_decision_timer = random.randint(25, 38)
+    else:
+        owner.ai_duke_pass_decision_timer = random.randint(38, 55)
+
+    active_pos = active.center()
+    teammate_pos = teammate.center()
+    opponent_pos = opponent.center()
+
+    pass_distance = math.hypot(
+        teammate_pos[0] - active_pos[0],
+        teammate_pos[1] - active_pos[1],
+    )
+
+    # Very short passes look silly; very long ones are easy interceptions.
+    if pass_distance < 72 or pass_distance > 330:
+        return False
+
+    holder_pressure = math.hypot(
+        opponent_pos[0] - active_pos[0],
+        opponent_pos[1] - active_pos[1],
+    )
+    teammate_pressure = math.hypot(
+        opponent_pos[0] - teammate_pos[0],
+        opponent_pos[1] - teammate_pos[1],
+    )
+    lane_clearance = _distance_to_pass_lane(
+        opponent_pos,
+        active_pos,
+        teammate_pos,
+    )
+
+    rim_x = active.arena["rim_x"]
+
+    # This game attacks the left-side rim: smaller x is generally more advanced.
+    teammate_progress = active_pos[0] - teammate_pos[0]
+
+    pressured = holder_pressure <= 82
+    heavily_pressured = holder_pressure <= 58
+    teammate_more_open = teammate_pressure >= holder_pressure + 34
+    teammate_wide_open = teammate_pressure >= 135
+    teammate_ahead = teammate_progress >= 38
+    trapped_near_rim = active_pos[0] <= rim_x + 78
+    safe_lane = lane_clearance >= 62
+    very_safe_lane = lane_clearance >= 92
+
+    # Hard AI avoids throwing directly through the defender.
+    if difficulty == "hard" and not safe_lane and not heavily_pressured:
+        return False
+
+    score = 0.0
+    if pressured:
+        score += 2.3
+    if heavily_pressured:
+        score += 1.1
+    if teammate_more_open:
+        score += 2.0
+    if teammate_wide_open:
+        score += 0.8
+    if teammate_ahead:
+        score += 1.2
+    if trapped_near_rim:
+        score += 1.0
+    if safe_lane:
+        score += 0.7
+    if very_safe_lane:
+        score += 0.5
+
+    if difficulty == "hard":
+        # Hard DUKE actively uses give-and-go passes and punishes double teams.
+        if score >= 4.0:
+            chance = 0.92
+        elif score >= 3.0:
+            chance = 0.72
+        elif score >= 2.2 and very_safe_lane:
+            chance = 0.42
+        else:
+            chance = 0.08 if very_safe_lane and teammate_ahead else 0.0
+
+        cooldown_after_pass = random.randint(42, 62)
+
+    elif difficulty == "normal":
+        if score >= 4.0:
+            chance = 0.58
+        elif score >= 3.2:
+            chance = 0.32
+        else:
+            chance = 0.0
+
+        cooldown_after_pass = random.randint(72, 100)
+
+    else:
+        # Easy DUKE only passes out of obvious pressure.
+        chance = 0.20 if heavily_pressured and teammate_more_open and safe_lane else 0.0
+        cooldown_after_pass = random.randint(105, 145)
+
+    if random.random() >= chance:
+        return False
+
+    if not ball.pass_to(teammate, active):
+        return False
+
+    owner.ai_duke_pass_cooldown = cooldown_after_pass
+    owner.ai_duke_pass_decision_timer = max(
+        owner.ai_duke_pass_decision_timer,
+        10,
+    )
+
+    # Receiver is the next offensive body. Once the pass is caught, the regular
+    # AI state machine immediately chooses its own shot / drive / dunk plan.
+    return True
+
+
+
+def _tick_duke_clone(owner, clone, ball):
+    """Return None when a clone expires. If it still has the ball, send a final pass home first."""
+    if clone is None:
+        owner.pass_target = None
+        return None
+    clone.clone_lifetime -= 1
+    if clone.clone_lifetime > 0:
+        return clone
+
+    if ball.state == "held" and ball.holder is clone:
+        if ball.pass_to(owner, clone):
+            clone.clone_lifetime = 45
+            return clone
+    if ball.state == "passing" and ball.pass_receiver is clone:
+        clone.clone_lifetime = 30
+        return clone
+
+    owner.pass_target = None
+    if ball.pass_passer is clone or ball.pass_receiver is clone:
+        ball.clear_pass()
+    return None
+
+
+def _team_score_owner(player):
+    return getattr(player, "clone_owner", None) or player
 
 
 def resolve_rebound(player1, player2, ball):
@@ -200,6 +459,7 @@ def _create_match(screen, font, small_font, title_font, assets_dir, mode):
     )
 
     if single_player:
+        player2.ai_difficulty = difficulty
         player2.apply_ai_difficulty(difficulty)
 
     ball = Ball(
@@ -273,6 +533,7 @@ def _reset_training_ball(player, ball, arena, attach=False):
     ball.last_shooter = None
     ball.shot_distance = 0
     ball.rebound_available = False
+    ball.clear_pass()
     ball.previous_x = ball.x
     ball.previous_y = ball.y
 
@@ -317,6 +578,8 @@ def play_training(
     points = 0
     dunks = 0
     previous_dunks = getattr(player, "dunks", 0)
+    duke_clone = None
+    active_player = player
 
     while True:
         for event in pygame.event.get():
@@ -334,14 +597,34 @@ def play_training(
 
         if not feedback.gameplay_frozen:
             keys = pygame.key.get_pressed()
-            player.handle_input(keys, ball, None)
-            player.update_physics()
 
-            player.try_dunk(ball)
+            # Duke: whoever currently possesses the ball becomes the controlled body.
+            if duke_clone is not None and ball.state == "held" and ball.holder in (player, duke_clone):
+                active_player = ball.holder
+            if active_player is duke_clone and duke_clone is None:
+                active_player = player
+
+            active_player.handle_input(keys, ball, None)
+            if duke_clone is not None:
+                support = player if active_player is duke_clone else duke_clone
+                _support_clone(support, active_player, None)
+
+            player.update_physics()
+            if duke_clone is not None:
+                duke_clone.update_physics()
+
+            if player.consume_clone_request() and duke_clone is None:
+                duke_clone = _create_duke_clone(player, assets_dir)
+            old_clone = duke_clone
+            duke_clone = _tick_duke_clone(player, duke_clone, ball)
+            if old_clone is not None and duke_clone is None and active_player is old_clone:
+                active_player = player
+
+            dunked = active_player.try_dunk(ball)
             ball.update()
 
             scorer, scored_points = ball.check_score()
-            if scorer is player:
+            if scorer is not None and _team_score_owner(scorer) is player:
                 made += 1
                 points += scored_points
 
@@ -360,6 +643,9 @@ def play_training(
 
         for event_type, event_x, event_y in player.consume_events():
             feedback.trigger(event_type, event_x, event_y)
+        if duke_clone is not None:
+            for event_type, event_x, event_y in duke_clone.consume_events():
+                feedback.trigger(event_type, event_x, event_y)
         for event_type, event_x, event_y in ball.consume_events():
             feedback.trigger(event_type, event_x, event_y)
 
@@ -367,6 +653,8 @@ def play_training(
 
         draw_arena(world_surface, arena, assets_dir)
         player.draw(world_surface, small_font)
+        if duke_clone is not None:
+            duke_clone.draw(world_surface, small_font)
         ball.draw(world_surface)
 
         panel = pygame.Surface((250, 132), pygame.SRCALPHA)
@@ -444,6 +732,8 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
         break
 
     players = [player1, player2]
+    duke_clones = {player1: None, player2: None}
+    active_bodies = {player1: player1, player2: player2}
     feedback = FeedbackManager()
     world_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
@@ -472,6 +762,9 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                         player1.score = 0
                         player2.score = 0
                         reset_round(player1, player2, ball, arena)
+                        duke_clones = {player1: None, player2: None}
+                        active_bodies = {player1: player1, player2: player2}
+                        players = [player1, player2]
                         game_over = False
                         winner = None
                         round_reset_timer = 0
@@ -490,37 +783,113 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                 round_reset_timer -= 1
                 if round_reset_timer == 0:
                     reset_round(player1, player2, ball, arena)
+                    duke_clones = {player1: None, player2: None}
+                    active_bodies = {player1: player1, player2: player2}
+                    players = [player1, player2]
             else:
                 keys = pygame.key.get_pressed()
 
-                for player in players:
-                    opponent = player2 if player is player1 else player1
-                    if player.ai_controlled:
-                        player.handle_ai(ball, opponent)
+                # Update each team. Duke can switch control between body and clone by passing.
+                for owner, opponent in ((player1, player2), (player2, player1)):
+                    clone = duke_clones[owner]
+                    team_bodies = (owner, clone) if clone is not None else (owner,)
+                    if ball.state == "held" and ball.holder in team_bodies:
+                        active_bodies[owner] = ball.holder
+                    active = active_bodies[owner]
+                    if active is None or (active is not owner and active is not clone):
+                        active = owner
+                        active_bodies[owner] = owner
+
+                    if owner.ai_controlled:
+                        # DUKE AI controls whichever body currently owns the ball.
+                        # This lets Blood Echo become a real secondary ball handler
+                        # instead of freezing whenever it receives a pass.
+                        if (
+                            clone is not None
+                            and ball.state == "held"
+                            and ball.holder in (owner, clone)
+                        ):
+                            active = ball.holder
+                            active_bodies[owner] = active
+                        elif (
+                            clone is not None
+                            and ball.state == "passing"
+                            and ball.pass_receiver in (owner, clone)
+                        ):
+                            # During the pass, let the intended receiver move toward
+                            # the ball so catches stay reliable.
+                            active = ball.pass_receiver
+                            active_bodies[owner] = active
+                        else:
+                            active = active_bodies[owner]
+                            if active not in (owner, clone):
+                                active = owner
+                                active_bodies[owner] = owner
+
+                        teammate = None
+                        if clone is not None:
+                            teammate = clone if active is owner else owner
+
+                        passed = False
+                        if teammate is not None:
+                            passed = _ai_duke_try_tactical_pass(
+                                owner,
+                                active,
+                                teammate,
+                                opponent,
+                                ball,
+                            )
+
+                        if not passed:
+                            active.handle_ai(ball, opponent)
                     else:
-                        player.handle_input(keys, ball, opponent)
-                    player.update_physics()
+                        active.handle_input(keys, ball, opponent)
+
+                    if clone is not None:
+                        support = owner if active is clone else clone
+                        _support_clone(support, active, opponent)
+
+                    owner.update_physics()
+                    if clone is not None:
+                        clone.update_physics()
+
+                    if owner.consume_clone_request() and clone is None:
+                        clone = _create_duke_clone(owner, assets_dir)
+                        duke_clones[owner] = clone
+                        players.append(clone)
+
+                    new_clone = _tick_duke_clone(owner, clone, ball)
+                    if new_clone is None and clone is not None:
+                        if clone in players:
+                            players.remove(clone)
+                        if active_bodies[owner] is clone:
+                            active_bodies[owner] = owner
+                        duke_clones[owner] = None
 
                 player1.try_dash_hit(player2, ball)
                 player2.try_dash_hit(player1, ball)
 
-                # 玩家或 AI 持球冲到篮下并处于上升阶段时自动扣篮。
-                dunked = player1.try_dunk(ball)
-                if not dunked:
-                    player2.try_dunk(ball)
+                # The currently controlled Duke body can dunk just like the original.
+                dunk_candidates = [active_bodies[player1], active_bodies[player2]]
+                dunked = False
+                for dunker in dunk_candidates:
+                    if dunker is not None and dunker.try_dunk(ball):
+                        dunked = True
+                        break
 
                 ball.update()
 
                 # 盖帽必须在篮球移动后、得分判定前处理。
                 # 任意一名空中防守者成功碰球后，本帧不再继续判定另一人。
-                blocked = player1.try_block_ball(ball)
+                blocked = active_bodies[player1].try_block_ball(ball)
                 if not blocked:
-                    player2.try_block_ball(ball)
+                    active_bodies[player2].try_block_ball(ball)
 
                 scorer, points = ball.check_score()
                 if scorer is None:
                     resolve_rebound(player1, player2, ball)
                 else:
+                    scorer = _team_score_owner(scorer)
                     scorer.score += points
                     score_popup_points = points
                     score_popup_timer = SCORE_POPUP_DURATION_FRAMES

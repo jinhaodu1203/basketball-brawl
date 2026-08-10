@@ -73,9 +73,36 @@ CHARACTERS = {
         "render_height": 136,
         "ui_accent": (167, 92, 255),
     },
+    "duke": {
+        "id": "duke",
+        "name": "DUKE",
+        "description": "Turn one playmaker into two.",
+        "ratings": {"speed": 4, "three": 4, "dunk": 2, "defense": 3},
+        "color": (196, 42, 58),
+        "move_speed": 5.2,
+        "jump_velocity": -14.2,
+        "steal_range": 54,
+        "ability_type": "clone",
+        "ability_name": "Mirror Clone",
+        "ability_description": "Create a temporary clone and pass between both bodies.",
+        "ability_cooldown": 780,
+        "clone_duration": 420,
+        "clone_support_distance": 165,
+        "shot_charge_speed": 1.08,
+        "shot_perfect_min": 0.43,
+        "shot_perfect_max": 0.64,
+        "shot_error_scale": 94,
+        # Duke 本体使用 Converted Vampire；分身使用独立的 Blood Echo 形态。
+        "sprite_folder": "duke",
+        "frame_counts": {'idle': 5, 'run': 8, 'jump': 7, 'walk': 8, 'attack_1': 5, 'attack_2': 3, 'attack_3': 4, 'hurt': 1, 'shield': 2},
+        "clone_sprite_folder": "duke_blood_echo",
+        "clone_frame_counts": {'idle': 5, 'run': 6, 'jump': 6, 'walk': 6, 'attack_1': 5, 'attack_2': 4, 'attack_3': 2, 'hurt': 2},
+        "render_height": 136,
+        "ui_accent": (230, 48, 68),
+    },
 }
 
-CHARACTER_ORDER = ["djh", "gorilla", "ninja"]
+CHARACTER_ORDER = ["djh", "gorilla", "ninja", "duke"]
 DEFAULT_PLAYER1_CHARACTER = "djh"
 DEFAULT_PLAYER2_CHARACTER = "gorilla"
 

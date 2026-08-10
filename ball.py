@@ -14,6 +14,8 @@ from constants import (
     DRIBBLE_SPEED_IDLE, DRIBBLE_SPEED_MOVING,
     DRIBBLE_HAND_OFFSET_X, DRIBBLE_HAND_OFFSET_Y,
     DRIBBLE_GROUND_CLEARANCE, DRIBBLE_MOVING_SWAY,
+    PASS_MIN_FRAMES, PASS_MAX_FRAMES, PASS_PIXELS_PER_FRAME,
+    PASS_CATCH_RADIUS, PASS_RECEIVE_IMMUNITY_FRAMES,
 )
 from animation import load_ball_frames
 
@@ -36,6 +38,11 @@ class Ball:
         self.frames = load_ball_frames(sprite_path, BALL_SPRITE_FRAME_COUNT)
         self.events = []
 
+        # 传球元数据。Duke 的分身会直接作为 pass_receiver 使用。
+        self.pass_passer = None
+        self.pass_receiver = None
+        self.pass_catch_delay = 0
+
         # V2.0：持球时篮球不再固定粘在手上，而是在手和地面之间循环运球。
         self.dribble_phase = 0.0
         self.dribble_side = 1
@@ -55,8 +62,14 @@ class Ball:
             self.radius * 2,
         )
 
+    def clear_pass(self):
+        self.pass_passer = None
+        self.pass_receiver = None
+        self.pass_catch_delay = 0
+
     def attach_to(self, player):
         self.rebound_available = False
+        self.clear_pass()
         self.state = "held"
         self.holder = player
         self.vx = 0
@@ -64,8 +77,35 @@ class Ball:
         self.dribble_phase = 0.0
         self.dribble_side = 1 if player.facing_right else -1
 
+    def pass_to(self, receiver, passer):
+        """把球以真实抛物线传向接球队友。返回是否成功发起传球。"""
+        if receiver is None or passer is None:
+            return False
+        if self.state != "held" or self.holder is not passer:
+            return False
+
+        target_x, target_y = receiver.center()
+        dx = target_x - self.x
+        dy = target_y - self.y
+        distance = max(1.0, (dx * dx + dy * dy) ** 0.5)
+        frames = int(round(distance / max(1, PASS_PIXELS_PER_FRAME)))
+        frames = max(PASS_MIN_FRAMES, min(PASS_MAX_FRAMES, frames))
+
+        self.rebound_available = False
+        self.state = "passing"
+        self.holder = None
+        self.last_shooter = None
+        self.shot_distance = 0
+        self.pass_passer = passer
+        self.pass_receiver = receiver
+        self.pass_catch_delay = 4
+        self.vx = dx / frames
+        self.vy = (dy - 0.5 * GRAVITY * frames ** 2) / frames
+        return True
+
     def shoot_towards(self, target_x, target_y, shooter, shot_distance=0):
         self.rebound_available = False
+        self.clear_pass()
         self.state = "flying"
         self.holder = None
         self.last_shooter = shooter
@@ -182,6 +222,23 @@ class Ball:
         self.x += self.vx
         self.y += self.vy
 
+        if self.state == "passing":
+            if self.pass_catch_delay > 0:
+                self.pass_catch_delay -= 1
+            receiver = self.pass_receiver
+            if receiver is not None and self.pass_catch_delay <= 0:
+                rx, ry = receiver.center()
+                dx = self.x - rx
+                dy = self.y - ry
+                if dx * dx + dy * dy <= (PASS_CATCH_RADIUS + self.radius) ** 2:
+                    self.attach_to(receiver)
+                    receiver.possession_immune_timer = max(
+                        receiver.possession_immune_timer,
+                        PASS_RECEIVE_IMMUNITY_FRAMES,
+                    )
+                    receiver.play_action_animation("shield", 10)
+                    return
+
         if self.state == "flying":
             self._handle_hoop_collisions()
 
@@ -199,12 +256,14 @@ class Ball:
             if abs(self.vy) < 2:
                 self.state = "loose"
                 self.rebound_available = False
+                self.clear_pass()
 
     def complete_dunk(self, player, points=1):
         """完成扣篮并缓存得分，让主循环沿用统一的计分流程。"""
         rim_x = self.arena["rim_x"]
         rim_y = self.arena["rim_y"]
         self.pending_score = (player, points)
+        self.clear_pass()
         self.last_shooter = player
         self.state = "loose"
         self.holder = None
@@ -245,6 +304,7 @@ class Ball:
             else POINTS_ON_OR_INSIDE_THREE
         )
         self.state = "loose"
+        self.clear_pass()
         self.vx = 0
         self.vy = 0
         self.x = self.arena["ball_spawn_x"]

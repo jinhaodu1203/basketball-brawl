@@ -26,6 +26,7 @@ from constants import (
     BOX_OUT_RANGE, BOX_OUT_PRIORITY_BONUS,
     DUNK_TRIGGER_DISTANCE, DUNK_TRIGGER_VERTICAL, DUNK_MIN_UPWARD_SPEED,
     DUNK_COOLDOWN_FRAMES, DUNK_POINTS,
+    PASS_INTERCEPT_RADIUS, PASS_RECEIVE_IMMUNITY_FRAMES,
 )
 from animation import load_character_animations, draw_procedural_character
 
@@ -86,6 +87,15 @@ class Player:
 
         self.possession_immune_timer = 0
         self.steal_cooldown_timer = 0
+        self.pass_key_was_down = False
+        self.pass_target = None
+
+        # Duke clone ability request. The Player only requests a clone;
+        # game.py owns creation/lifetime/control switching for the clone entity.
+        self.clone_request_pending = False
+        self.is_clone = False
+        self.clone_owner = None
+        self.clone_lifetime = 0
 
         self.ability_cooldown_max = self.character_config.get("ability_cooldown", 0)
         self.ability_cooldown_timer = 0
@@ -259,6 +269,21 @@ class Player:
         if not want_interact:
             return
 
+        # 传球可以被防守者用抢断键截获；预定接球队友由 Ball 自动接球。
+        if ball.state == "passing" and ball.holder is None:
+            if self is ball.pass_passer or self is ball.pass_receiver:
+                return
+            my_x, my_y = self.center()
+            dx = ball.x - my_x
+            dy = ball.y - my_y
+            intercept_range = max(PASS_INTERCEPT_RADIUS, self.steal_range) + ball.radius
+            if dx * dx + dy * dy <= intercept_range * intercept_range:
+                ball.attach_to(self)
+                self.possession_immune_timer = PASS_RECEIVE_IMMUNITY_FRAMES
+                self.steal_cooldown_timer = STEAL_COOLDOWN_FRAMES
+                self.events.append(("steal", ball.x, ball.y))
+            return
+
         # 只能捡起真正处于 loose 状态的球。
         # flying 状态也满足 holder is None；若不判断 state，AI 投篮后的下一帧
         # 会立刻把刚离手的球重新吸回手中。
@@ -293,6 +318,23 @@ class Player:
             self.possession_immune_timer = POSSESSION_COOLDOWN_FRAMES
             self.steal_cooldown_timer = STEAL_COOLDOWN_FRAMES
 
+    def _handle_pass(self, pass_pressed, ball, target=None):
+        """上升沿触发一次传球；无队友时保持持球，不会误操作。"""
+        just_pressed = pass_pressed and not self.pass_key_was_down
+        self.pass_key_was_down = bool(pass_pressed)
+        if not just_pressed:
+            return False
+        if target is None or target is self:
+            return False
+        if ball.state != "held" or ball.holder is not self:
+            return False
+        if ball.pass_to(target, self):
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+            self.play_action_animation("attack_1", 10)
+            return True
+        return False
+
     def _apply_ability(self, want_ability, opponent=None, ball=None):
         if not want_ability:
             return
@@ -302,6 +344,27 @@ class Player:
             self._use_ground_slam(opponent, ball)
         elif self.ability_type == "double_jump":
             self._use_double_jump()
+        elif self.ability_type == "clone":
+            self._use_clone()
+
+    def _use_clone(self):
+        """Request Duke's clone. game.py creates the actual clone entity."""
+        if self.is_clone:
+            return
+        if self.ability_cooldown_timer > 0:
+            return
+        self.clone_request_pending = True
+        self.ability_cooldown_timer = self.ability_cooldown_max
+        clone_x, clone_y = self.center()
+        self.events.append(("clone", clone_x, clone_y))
+        self.play_action_animation("attack_2", 18)
+
+    def consume_clone_request(self):
+        """Return and clear a pending Duke clone request."""
+        if not self.clone_request_pending:
+            return False
+        self.clone_request_pending = False
+        return True
 
     def _use_dash(self):
         if self.ability_cooldown_timer > 0 or self.is_dashing:
@@ -383,6 +446,9 @@ class Player:
         self._apply_jump(keys[controls["jump"]])
         self._apply_ability(keys[controls["ability"]], opponent, ball)
         self._update_dash()
+        pass_key = controls.get("pass")
+        pass_pressed = bool(pass_key is not None and keys[pass_key])
+        self._handle_pass(pass_pressed, ball, self.pass_target)
         self._handle_charge_shot(keys[controls["action"]], ball)
         self._apply_steal_or_pickup(keys[controls["steal"]], ball)
 
@@ -702,6 +768,9 @@ class Player:
         self.on_ground = True
         self.possession_immune_timer = 0
         self.steal_cooldown_timer = 0
+        self.pass_key_was_down = False
+        self.pass_target = None
+        self.clone_request_pending = False
         self.ability_cooldown_timer = 0
         self.is_dashing = False
         self.dash_timer = 0

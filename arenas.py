@@ -166,7 +166,8 @@ def draw_arena(screen, arena, assets_dir):
             3,
         )
 
-    label_font = pygame.font.SysFont("arial", 15, bold=True)
+    label_font = pygame.font.Font(None, 18)
+    label_font.set_bold(True)
     label = label_font.render("3PT", True, arena["line_color"])
     badge = pygame.Surface((label.get_width() + 12, label.get_height() + 5), pygame.SRCALPHA)
     pygame.draw.rect(badge, (5, 10, 22, 165), badge.get_rect(), border_radius=7)

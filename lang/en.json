@@ -43,6 +43,7 @@
       "Jump, block, rebound, dunk: W",
       "Shoot / charge shot: SPACE",
       "Steal / pick up ball: S",
+      "Pass: F (when a teammate / Duke Blood Echo exists)",
       "Character ability: LEFT SHIFT"
     ],
     "p2_lines": [
@@ -50,6 +51,7 @@
       "Jump, block, rebound, dunk: UP",
       "Shoot / charge shot: ENTER",
       "Steal / pick up ball: DOWN",
+      "Pass: RIGHT SHIFT (when a teammate / Duke Blood Echo exists)",
       "Character ability: RIGHT CTRL"
     ],
     "rule_lines": [
@@ -62,7 +64,9 @@
       "Pause match: ESC",
       "Dunk: carry the ball above the rim, then descend",
       "Blocks and rebounds trigger while jumping",
-      "Use each character ability to create an advantage"
+      "Use each character ability to create an advantage",
+      "Duke: use the character ability to summon Blood Echo",
+      "Duke: the body and Blood Echo use different forms; control switches to the receiver after a pass"
     ]
   },
   "credits": {
@@ -150,6 +154,11 @@
       "name": "KAGE",
       "description": "No one can catch a shadow.",
       "ability": "Shadow Jump"
+    },
+    "duke": {
+      "name": "DUKE",
+      "description": "A playmaker who turns one body into two.",
+      "ability": "Mirror Clone"
     }
   },
   "arenas": {
@@ -172,7 +181,7 @@
     "made": "Made: {value}",
     "points": "Points: {value}",
     "dunks": "Dunks: {value}",
-    "hint": "TAB: Return ball    R: Reset ball    ESC: Back"
+    "hint": "TAB: Return ball    R: Reset ball    F: Pass (when teammate exists)    ESC: Back"
   },
   "feedback_page": {
     "title": "PLAYER FEEDBACK",
