@@ -158,8 +158,16 @@ def _support_clone(clone, active, opponent):
     delta = desired_x - clone.x
     direction = 0 if abs(delta) < 18 else (1 if delta > 0 else -1)
     clone._apply_horizontal_move(direction)
-    # Face the ball handler so the catch animation and dribble hand look natural.
-    clone.facing_right = active.center()[0] >= clone.center()[0]
+
+    # Blood Echo 移动时必须朝移动方向看，
+    # 否则会出现身体朝持球人、却反方向倒着跑的视觉 Bug。
+    if direction > 0:
+        clone.facing_right = True
+    elif direction < 0:
+        clone.facing_right = False
+    else:
+        # 只有站着不动时才面向持球人。
+        clone.facing_right = active.center()[0] >= clone.center()[0]
 
 
 
@@ -196,6 +204,21 @@ def _ai_duke_try_tactical_pass(owner, active, teammate, opponent, ball):
         return False
 
     difficulty = str(getattr(owner, "ai_difficulty", "normal")).lower()
+
+    # 困难 AI 最后 3 秒进入紧急进攻。
+    # 此时不再让 DUKE / Blood Echo 来回传球浪费进攻时间。
+    shot_clock_frames = getattr(
+        active,
+        "ai_shot_clock_frames",
+        None,
+    )
+
+    if (
+        difficulty == "hard"
+        and shot_clock_frames is not None
+        and shot_clock_frames <= 3 * FPS
+    ):
+        return False
 
     # Persistent team-level timers live on the real DUKE body.
     cooldown = int(getattr(owner, "ai_duke_pass_cooldown", 0))
@@ -1196,6 +1219,17 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                         active_bodies[owner] = owner
 
                     if owner.ai_controlled:
+                        # 把当前进攻时间传给正在控制的 AI 身体。
+                        # DUKE 与 Blood Echo 谁持球，谁就读取同一个球队计时器。
+                        active.ai_shot_clock_frames = (
+                            shot_clock_frames
+                            if (
+                                shot_clock_active
+                                and shot_clock_team is owner
+                            )
+                            else None
+                        )
+
                         # DUKE AI controls whichever body currently owns the ball.
                         # This lets Blood Echo become a real secondary ball handler
                         # instead of freezing whenever it receives a pass.

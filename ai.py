@@ -433,6 +433,85 @@ def update_ai(player, ball, opponent):
     opponent_has_ball = ball.state == "held" and ball.holder is opponent
     opponent_shot = ball.state == "flying" and ball.last_shooter is opponent
 
+    # ========================================================
+    # 困难 AI：Shot Clock 最后 3 秒紧急进攻
+    # ========================================================
+    shot_clock_frames = getattr(
+        player,
+        "ai_shot_clock_frames",
+        None,
+    )
+
+    difficulty = str(
+        getattr(
+            player,
+            "ai_difficulty",
+            "normal",
+        )
+    ).lower()
+
+    urgent_offense = (
+        has_ball
+        and difficulty == "hard"
+        and shot_clock_frames is not None
+        and shot_clock_frames <= 3 * 60
+        and not getattr(
+            player,
+            "must_clear_three",
+            False,
+        )
+    )
+
+    if urgent_offense:
+        rim_distance = max(
+            0.0,
+            distance_from_rim,
+        )
+
+        # 根据当前位置决定按中投还是三分结算。
+        if (
+            rim_distance
+            >= player.arena["three_point_distance"]
+        ):
+            player.ai_attack_choice = ATTACK_THREE
+        else:
+            player.ai_attack_choice = ATTACK_MID
+
+        player.ai_shot_target = None
+
+        opponent_distance = math.hypot(
+            opponent.center()[0] - my_cx,
+            opponent.center()[1] - my_cy,
+        )
+
+        # 3 秒内：
+        # 空位或正常空间直接出手。
+        #
+        # 1.5 秒内：
+        # 无论防守多近都必须强投，避免进攻超时。
+        force_shot = shot_clock_frames <= 90
+        reasonable_window = opponent_distance >= 70
+
+        if (
+            player.ai_shot_cooldown <= 0
+            and (
+                force_shot
+                or reasonable_window
+            )
+        ):
+            _shoot(
+                player,
+                ball,
+            )
+
+            _set_state(
+                player,
+                SHOT_RECOVER,
+            )
+
+            player.ai_had_ball_last_frame = False
+            return
+
     # 新球权：只在这里抽一次进攻选择，之后一直锁定到出手/扣篮结束。
     if has_ball and not player.ai_had_ball_last_frame:
         player.ai_attack_choice = _choose_attack(player, opponent)
