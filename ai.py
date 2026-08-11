@@ -171,9 +171,9 @@ def _get_difficulty_accuracy(player):
             "dunk": 0.95,
         },
         "hard": {
-            "three": 0.55,
-            "mid": 0.70,
-            "layup": 0.85,
+            "three": 0.80,
+            "mid": 0.80,
+            "layup": 1.00,
             "dunk": 1.00,
         },
         "normal": {
@@ -198,26 +198,39 @@ def _shoot(player, ball):
 
     accuracy = _get_difficulty_accuracy(player)
 
-    if player.ai_attack_choice == ATTACK_THREE:
-        hit_chance = accuracy["three"]
-        three_rating = _character_rating(player, "three")
-        hit_chance += (three_rating - 3) * 0.035
-    else:
-        hit_chance = accuracy["mid"]
-
-    # 防守压力影响投篮。
-    opponent = getattr(player, "opponent", None)
-    if opponent:
-        distance = math.hypot(
-            opponent.center()[0] - player.center()[0],
-            opponent.center()[1] - player.center()[1],
+    difficulty = str(
+        getattr(
+            player,
+            "ai_difficulty",
+            getattr(player, "difficulty", "normal"),
         )
-        if distance < 70:
-            hit_chance -= 0.15
-        elif distance > 160:
-            hit_chance += 0.05
+    ).lower()
 
-    hit_chance = max(0.05, min(0.95, hit_chance))
+    if difficulty == "hard":
+        # 困难模式：
+        # 三分和中投最终命中率固定为 80%。
+        hit_chance = 0.80
+    else:
+        if player.ai_attack_choice == ATTACK_THREE:
+            hit_chance = accuracy["three"]
+            three_rating = _character_rating(player, "three")
+            hit_chance += (three_rating - 3) * 0.035
+        else:
+            hit_chance = accuracy["mid"]
+
+        # Easy / Normal 仍然受防守压力影响。
+        opponent = getattr(player, "opponent", None)
+        if opponent:
+            distance = math.hypot(
+                opponent.center()[0] - player.center()[0],
+                opponent.center()[1] - player.center()[1],
+            )
+            if distance < 70:
+                hit_chance -= 0.15
+            elif distance > 160:
+                hit_chance += 0.05
+
+        hit_chance = max(0.05, min(0.95, hit_chance))
 
     if random.random() > hit_chance:
         target_x += random.uniform(-AI_SHOT_MISS_OFFSET, AI_SHOT_MISS_OFFSET)
@@ -614,9 +627,14 @@ def update_ai(player, ball, opponent):
             player.try_pick_up(ball, force=True)
 
         rebound_available = getattr(ball, "rebound_available", False)
+        rebound_ready = (
+            rebound_available
+            and getattr(ball, "rebound_grace_timer", 0) <= 0
+        )
+
         if (
             ball.holder is None
-            and rebound_available
+            and rebound_ready
             and ball.y < my_cy + 10
             and abs(horizontal_distance) < AI_REBOUND_JUMP_RANGE
         ):
@@ -625,7 +643,7 @@ def update_ai(player, ball, opponent):
         if (
             player.ability_type == "double_jump"
             and ball.holder is None
-            and rebound_available
+            and rebound_ready
             and not player.on_ground
             and player.double_jump_available
             and ball.y < my_cy

@@ -58,7 +58,8 @@
       "Inside the 3PT line: 1 point",
       "Outside the 3PT line: 2 points",
       "First player to reach the target score wins",
-      "Hold shoot, then release in the green zone"
+      "Hold shoot, then release in the green zone",
+      "After a defensive rebound, clear the ball beyond the 3PT line"
     ],
     "general_lines": [
       "Pause match: ESC",
@@ -193,5 +194,11 @@
     "open": "OPEN FEEDBACK PAGE",
     "opened": "Feedback page opened in your browser.",
     "hint": "ENTER: open page    ESC: back"
+  },
+  "gameplay": {
+    "clear_ball": "CLEAR THE BALL",
+    "clear_ball_hint": "Take the ball beyond the 3PT line before attacking",
+    "cleared": "CLEARED!",
+    "cleared_hint": "You can attack now"
   }
 }

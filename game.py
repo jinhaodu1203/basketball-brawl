@@ -64,6 +64,12 @@ def reset_round(player1, player2, ball, arena):
     player1.must_clear_three = False
     player2.must_clear_three = False
 
+    # 清除三分线 clear 提示。
+    player1.clear_feedback_state = None
+    player2.clear_feedback_state = None
+    player1.clear_feedback_timer = 0
+    player2.clear_feedback_timer = 0
+
     ball.x = arena["ball_spawn_x"]
     ball.y = arena["ground_y"] - 200
     ball.previous_x = ball.x
@@ -341,11 +347,124 @@ def _team_score_owner(player):
 
 
 def _set_team_clear_required(owner, clone=None, required=True):
-    """设置整支球队是否需要先退出三分线。"""
+    """设置整支球队是否需要先退出三分线，并管理屏幕提示。"""
+    was_required = getattr(owner, "must_clear_three", False)
+
     owner.must_clear_three = bool(required)
 
     if clone is not None:
         clone.must_clear_three = bool(required)
+
+    if required:
+        # 防守篮板后持续显示，直到真正退出三分线。
+        owner.clear_feedback_state = "required"
+        owner.clear_feedback_timer = -1
+
+        if clone is not None:
+            clone.clear_feedback_state = "required"
+            clone.clear_feedback_timer = -1
+
+    elif was_required:
+        # 成功退出三分线后短暂显示 CLEARED。
+        owner.clear_feedback_state = "cleared"
+        owner.clear_feedback_timer = 45
+
+        if clone is not None:
+            clone.clear_feedback_state = "cleared"
+            clone.clear_feedback_timer = 45
+
+
+def _draw_clear_notice(surface, title_font, small_font, player1, player2):
+    """绘制防守篮板后三分线清球提示。"""
+    required_owner = None
+
+    for owner in (player1, player2):
+        if getattr(owner, "must_clear_three", False):
+            required_owner = owner
+            break
+
+    if required_owner is not None:
+        main_text = tr("gameplay.clear_ball")
+        sub_text = tr("gameplay.clear_ball_hint")
+        main_color = (255, 190, 65)
+    else:
+        cleared_owner = None
+
+        for owner in (player1, player2):
+            if (
+                getattr(owner, "clear_feedback_state", None) == "cleared"
+                and getattr(owner, "clear_feedback_timer", 0) > 0
+            ):
+                cleared_owner = owner
+                break
+
+        if cleared_owner is None:
+            return
+
+        main_text = tr("gameplay.cleared")
+        sub_text = tr("gameplay.cleared_hint")
+        main_color = (100, 255, 145)
+
+    main_surface = title_font.render(
+        main_text,
+        True,
+        main_color,
+    )
+
+    sub_surface = small_font.render(
+        sub_text,
+        True,
+        (235, 240, 250),
+    )
+
+    panel_width = max(
+        360,
+        main_surface.get_width() + 60,
+        sub_surface.get_width() + 60,
+    )
+    panel_height = 92
+
+    panel = pygame.Surface(
+        (panel_width, panel_height),
+        pygame.SRCALPHA,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (5, 10, 22, 215),
+        panel.get_rect(),
+        border_radius=16,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (*main_color, 210),
+        panel.get_rect(),
+        width=2,
+        border_radius=16,
+    )
+
+    panel.blit(
+        main_surface,
+        main_surface.get_rect(
+            center=(panel_width // 2, 32)
+        ),
+    )
+
+    panel.blit(
+        sub_surface,
+        sub_surface.get_rect(
+            center=(panel_width // 2, 68)
+        ),
+    )
+
+    surface.blit(
+        panel,
+        (
+            SCREEN_WIDTH // 2 - panel_width // 2,
+            58,
+        ),
+    )
 
 
 def _update_team_clear_status(owner, clone, ball):
@@ -1022,6 +1141,21 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
 
         if score_popup_timer > 0:
             score_popup_timer -= 1
+
+        # CLEARED 提示显示约 0.75 秒后自动消失。
+        for clear_owner in (player1, player2):
+            timer = getattr(
+                clear_owner,
+                "clear_feedback_timer",
+                0,
+            )
+
+            if timer > 0:
+                clear_owner.clear_feedback_timer -= 1
+
+                if clear_owner.clear_feedback_timer <= 0:
+                    clear_owner.clear_feedback_state = None
+
         feedback.update()
 
         draw_arena(world_surface, arena, assets_dir)
@@ -1035,6 +1169,15 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
             score_popup_points,
             score_popup_timer,
             arena,
+        )
+
+        # 防守篮板后三分线 clear 状态提示。
+        _draw_clear_notice(
+            world_surface,
+            title_font,
+            small_font,
+            player1,
+            player2,
         )
 
         feedback.present_world(world_surface, screen)
