@@ -34,6 +34,12 @@ class Ball:
         self.last_shooter = None
         self.shot_distance = 0
         self.rebound_available = False
+
+        # AI 篮板保护时间。
+        # 球刚碰到篮圈/篮板时先让篮球自然颠动，
+        # 避免 AI 在球还可能滚进篮筐时提前把球摘走。
+        self.rebound_grace_timer = 0
+
         self.pending_score = None
         self.frames = load_ball_frames(sprite_path, BALL_SPRITE_FRAME_COUNT)
         self.events = []
@@ -69,6 +75,7 @@ class Ball:
 
     def attach_to(self, player):
         self.rebound_available = False
+        self.rebound_grace_timer = 0
         self.clear_pass()
         self.state = "held"
         self.holder = player
@@ -105,11 +112,22 @@ class Ball:
 
     def shoot_towards(self, target_x, target_y, shooter, shot_distance=0):
         self.rebound_available = False
+        self.rebound_grace_timer = 0
         self.clear_pass()
         self.state = "flying"
         self.holder = None
         self.last_shooter = shooter
         self.shot_distance = shot_distance
+
+        # 半场规则：
+        # 防守篮板后必须先退出三分线。
+        # 出手瞬间还没有完成 clear，则这一球即使进框也不计分。
+        self.shot_score_allowed = not getattr(
+            shooter,
+            "must_clear_three",
+            False,
+        )
+
         frames = SHOT_FLIGHT_FRAMES
         self.vx = (target_x - self.x) / frames
         self.vy = (target_y - self.y - 0.5 * GRAVITY * frames ** 2) / frames
@@ -165,6 +183,10 @@ class Ball:
             self.vx = abs(self.vx) * BACKBOARD_BOUNCE_DAMPING
             self.rebound_available = True
 
+            # 约 0.4 秒内 AI 不允许抢篮板。
+            # 再次碰板会重新开始计时。
+            self.rebound_grace_timer = 24
+
         hit_left_rim = self._resolve_circle_collision(
             rim_x - hoop_half_width,
             rim_y,
@@ -178,9 +200,17 @@ class Ball:
         )
         if hit_left_rim or hit_right_rim:
             self.rebound_available = True
+
+            # 球在篮圈上颠动期间不要让 AI 立即摘板。
+            # 每一次重新碰框都会刷新保护时间。
+            self.rebound_grace_timer = 24
+
     def update(self):
         self.previous_x = self.x
         self.previous_y = self.y
+
+        if self.rebound_grace_timer > 0:
+            self.rebound_grace_timer -= 1
 
         if self.state == "held" and self.holder is not None:
             holder = self.holder
@@ -295,6 +325,11 @@ class Ball:
         crossed_rim_height = self.previous_y < rim_y <= self.y
         inside_rim = abs(self.x - rim_x) <= scoring_half_width
         if not (crossed_rim_height and inside_rim):
+            return None, 0
+
+        # 防守篮板后没有先退出三分线：
+        # 篮球可以正常穿框，但不计任何分数，也不重置回合。
+        if not getattr(self, "shot_score_allowed", True):
             return None, 0
 
         scorer = self.last_shooter

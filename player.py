@@ -449,7 +449,19 @@ class Player:
         pass_key = controls.get("pass")
         pass_pressed = bool(pass_key is not None and keys[pass_key])
         self._handle_pass(pass_pressed, ball, self.pass_target)
-        self._handle_charge_shot(keys[controls["action"]], ball)
+
+        # 半场规则：
+        # 抢到防守篮板后，真人玩家也必须先退出三分线。
+        # 完成 clear 之前禁止投篮。
+        if getattr(self, "must_clear_three", False):
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+        else:
+            self._handle_charge_shot(
+                keys[controls["action"]],
+                ball,
+            )
+
         self._apply_steal_or_pickup(keys[controls["steal"]], ball)
 
     def handle_ai(self, ball, opponent):
@@ -518,6 +530,11 @@ class Player:
         if self.dunk_cooldown_timer > 0:
             return False
         if ball.state != "held" or ball.holder is not self:
+            return False
+
+        # 防守篮板后必须先退出三分线。
+        # 未完成 clear 时不能直接在篮下扣篮得分。
+        if getattr(self, "must_clear_three", False):
             return False
 
         # 必须已经过了起跳最高点并正在下降，不能在上升阶段自动扣篮。
@@ -607,6 +624,14 @@ class Player:
     def rebound_candidate_score(self, ball, opponent=None):
         """返回篮板竞争分数；None 表示当前无法抢到。"""
         if self.on_ground or self.rebound_cooldown_timer > 0:
+            return None
+
+        # AI 不允许在篮球刚碰框、仍可能颠入篮筐时提前摘板。
+        # 真人玩家保持原来的操作手感。
+        if (
+            self.ai_controlled
+            and getattr(ball, "rebound_grace_timer", 0) > 0
+        ):
             return None
         if ball.holder is not None or not getattr(ball, "rebound_available", False):
             return None

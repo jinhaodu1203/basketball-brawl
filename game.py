@@ -59,6 +59,11 @@ PLAYER2_CONTROLS = {
 def reset_round(player1, player2, ball, arena):
     player1.reset_for_round(arena["player1_spawn_x"])
     player2.reset_for_round(arena["player2_spawn_x"])
+
+    # 新回合重新拥有正常进攻资格。
+    player1.must_clear_three = False
+    player2.must_clear_three = False
+
     ball.x = arena["ball_spawn_x"]
     ball.y = arena["ground_y"] - 200
     ball.previous_x = ball.x
@@ -105,6 +110,14 @@ def _create_duke_clone(owner, assets_dir):
     clone.ability_cooldown_timer = 0
     clone.pass_target = owner
     owner.pass_target = clone
+
+    # DUKE 与 Blood Echo 属于同一支球队，
+    # 防守篮板后的 clear 状态必须共享。
+    clone.must_clear_three = getattr(
+        owner,
+        "must_clear_three",
+        False,
+    )
 
     if owner.ai_controlled:
         difficulty = str(getattr(owner, "ai_difficulty", "normal")).lower()
@@ -325,6 +338,43 @@ def _tick_duke_clone(owner, clone, ball):
 
 def _team_score_owner(player):
     return getattr(player, "clone_owner", None) or player
+
+
+def _set_team_clear_required(owner, clone=None, required=True):
+    """设置整支球队是否需要先退出三分线。"""
+    owner.must_clear_three = bool(required)
+
+    if clone is not None:
+        clone.must_clear_three = bool(required)
+
+
+def _update_team_clear_status(owner, clone, ball):
+    """持球队员真正越过三分线后，解除球队 clear 限制。"""
+    if not getattr(owner, "must_clear_three", False):
+        return
+
+    if ball.state != "held" or ball.holder is None:
+        return
+
+    team_bodies = (owner, clone) if clone is not None else (owner,)
+    if ball.holder not in team_bodies:
+        return
+
+    holder = ball.holder
+    holder_x, _ = holder.center()
+
+    rim_x = owner.arena["rim_x"]
+    three_distance = owner.arena["three_point_distance"]
+
+    # 当前比赛只使用左侧篮筐，因此三分线外在篮筐右侧。
+    clear_line_x = rim_x + three_distance
+
+    if holder_x >= clear_line_x:
+        _set_team_clear_required(
+            owner,
+            clone,
+            False,
+        )
 
 
 def resolve_rebound(player1, player2, ball):
@@ -826,22 +876,50 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                                 active = owner
                                 active_bodies[owner] = owner
 
-                        teammate = None
-                        if clone is not None:
-                            teammate = clone if active is owner else owner
+                        # 防守篮板后，AI 的第一优先级是把球带出三分线。
+                        # clear 完成以前不投篮、不扣篮，也不进行 DUKE 战术传球。
+                        force_clear = (
+                            getattr(owner, "must_clear_three", False)
+                            and ball.state == "held"
+                            and ball.holder is active
+                        )
 
-                        passed = False
-                        if teammate is not None:
-                            passed = _ai_duke_try_tactical_pass(
-                                owner,
-                                active,
-                                teammate,
-                                opponent,
-                                ball,
+                        if force_clear:
+                            clear_line_x = (
+                                active.arena["rim_x"]
+                                + active.arena["three_point_distance"]
                             )
 
-                        if not passed:
-                            active.handle_ai(ball, opponent)
+                            if active.center()[0] < clear_line_x:
+                                # 本游戏进攻篮筐位于左侧，
+                                # 所以退出三分线就是向右运球。
+                                active._apply_horizontal_move(1)
+                                active._update_dash()
+                            else:
+                                _set_team_clear_required(
+                                    owner,
+                                    clone,
+                                    False,
+                                )
+                                active.handle_ai(ball, opponent)
+
+                        else:
+                            teammate = None
+                            if clone is not None:
+                                teammate = clone if active is owner else owner
+
+                            passed = False
+                            if teammate is not None:
+                                passed = _ai_duke_try_tactical_pass(
+                                    owner,
+                                    active,
+                                    teammate,
+                                    opponent,
+                                    ball,
+                                )
+
+                            if not passed:
+                                active.handle_ai(ball, opponent)
                     else:
                         active.handle_input(keys, ball, opponent)
 
@@ -852,6 +930,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     owner.update_physics()
                     if clone is not None:
                         clone.update_physics()
+
+                    # 真人和 AI 都使用同一套三分线 clear 判定。
+                    _update_team_clear_status(
+                        owner,
+                        clone,
+                        ball,
+                    )
 
                     if owner.consume_clone_request() and clone is None:
                         clone = _create_duke_clone(owner, assets_dir)
@@ -887,7 +972,37 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
 
                 scorer, points = ball.check_score()
                 if scorer is None:
-                    resolve_rebound(player1, player2, ball)
+                    rebounder = resolve_rebound(
+                        player1,
+                        player2,
+                        ball,
+                    )
+
+                    if rebounder is not None:
+                        rebound_owner = _team_score_owner(
+                            rebounder
+                        )
+
+                        previous_shooter = ball.last_shooter
+
+                        if previous_shooter is not None:
+                            shooter_owner = _team_score_owner(
+                                previous_shooter
+                            )
+
+                            # 只有“对方投丢后抢到的防守篮板”
+                            # 才需要退出三分线。
+                            #
+                            # 自己投丢后自己抢到：
+                            # 属于进攻篮板，可以直接二次进攻。
+                            if shooter_owner is not rebound_owner:
+                                _set_team_clear_required(
+                                    rebound_owner,
+                                    duke_clones.get(
+                                        rebound_owner
+                                    ),
+                                    True,
+                                )
                 else:
                     scorer = _team_score_owner(scorer)
                     scorer.score += points
