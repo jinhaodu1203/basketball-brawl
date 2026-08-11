@@ -35,6 +35,10 @@ class Ball:
         self.shot_distance = 0
         self.rebound_available = False
 
+        # 记录当前投篮的碰框次数。
+        self.rim_contact_count = 0
+        self.rim_sound_cooldown = 0
+
         # AI 篮板保护时间。
         # 球刚碰到篮圈/篮板时先让篮球自然颠动，
         # 避免 AI 在球还可能滚进篮筐时提前把球摘走。
@@ -108,10 +112,19 @@ class Ball:
         self.pass_catch_delay = 4
         self.vx = dx / frames
         self.vy = (dy - 0.5 * GRAVITY * frames ** 2) / frames
+
+        self.events.append(
+            ("pass", self.x, self.y)
+        )
+
         return True
 
     def shoot_towards(self, target_x, target_y, shooter, shot_distance=0):
         self.rebound_available = False
+
+        # 新投篮重新计算碰框次数。
+        self.rim_contact_count = 0
+        self.rim_sound_cooldown = 0
         self.rebound_grace_timer = 0
         self.clear_pass()
         self.state = "flying"
@@ -131,6 +144,10 @@ class Ball:
         frames = SHOT_FLIGHT_FRAMES
         self.vx = (target_x - self.x) / frames
         self.vy = (target_y - self.y - 0.5 * GRAVITY * frames ** 2) / frames
+
+        self.events.append(
+            ("shot", self.x, self.y)
+        )
 
     def _resolve_circle_collision(self, collider_x, collider_y, collider_radius):
         """让篮球与圆形篮筐边缘发生反弹。"""
@@ -201,6 +218,23 @@ class Ball:
         if hit_left_rim or hit_right_rim:
             self.rebound_available = True
 
+            # 第一次砸框正常音量。
+            # 后续每次真实颠框都播放更轻的 DUANG。
+            #
+            # cooldown 防止同一个物理碰撞连续几帧产生声音。
+            if self.rim_sound_cooldown <= 0:
+                if self.rim_contact_count == 0:
+                    self.events.append(
+                        ("rim", rim_x, rim_y)
+                    )
+                else:
+                    self.events.append(
+                        ("rim_soft", rim_x, rim_y)
+                    )
+
+                self.rim_contact_count += 1
+                self.rim_sound_cooldown = 4
+
             # 球在篮圈上颠动期间不要让 AI 立即摘板。
             # 每一次重新碰框都会刷新保护时间。
             self.rebound_grace_timer = 24
@@ -208,6 +242,9 @@ class Ball:
     def update(self):
         self.previous_x = self.x
         self.previous_y = self.y
+
+        if self.rim_sound_cooldown > 0:
+            self.rim_sound_cooldown -= 1
 
         if self.rebound_grace_timer > 0:
             self.rebound_grace_timer -= 1
@@ -280,9 +317,16 @@ class Ball:
             self.vx *= -BALL_BOUNCE_DAMPING
 
         if self.y + self.radius > self.arena["ground_y"]:
+            impact_speed = abs(self.vy)
+
             self.y = self.arena["ground_y"] - self.radius
             self.vy *= -BALL_BOUNCE_DAMPING
             self.vx *= 0.85
+
+            if impact_speed >= 4.0:
+                self.events.append(
+                    ("bounce", self.x, self.y)
+                )
             if abs(self.vy) < 2:
                 self.state = "loose"
                 self.rebound_available = False

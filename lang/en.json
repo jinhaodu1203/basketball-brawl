@@ -30,7 +30,10 @@
     "fullscreen": "Fullscreen: {value}",
     "volume": "Master Volume: {value}%",
     "show_fps": "Show FPS: {value}",
-    "help": "LEFT/RIGHT adjusts values. Changes are saved automatically."
+    "help": "LEFT/RIGHT adjusts values. Volume changes are previewed live and saved automatically.",
+    "master_volume": "Master Volume: {value}%",
+    "music_volume": "Music Volume: {value}%",
+    "sfx_volume": "SFX Volume: {value}%"
   },
   "how": {
     "title": "HOW TO PLAY",
@@ -81,21 +84,23 @@
     "creator_lines": [
       "Created and directed by Jinhao Du (David)",
       "Independent game development project",
-      "Original concept: 2D Basketball Brawl"
+      "Original game: HOOP HAVOC"
     ],
     "development_lines": [
       "Programming: Python + Pygame",
       "Game design, balancing and testing: Jinhao Du",
-      "Current build: Release Build"
+      "Current build: V3.3 Development Build"
     ],
     "thanks_lines": [
       "Pygame community and open-source contributors",
-      "Friends and players who test each build",
-      "Northeastern University community"
+      "Audio resources: Pixabay (pixabay.com)",
+      "Winner sound: PuyoPuyoMegaFan1234 / Pixabay",
+      "Friends and players who test each build"
     ],
     "notice_lines": [
-      "All commercial art, music and fonts must be licensed",
-      "Basketball Brawl is an independent original project",
+      "Some music and sound effects are sourced from Pixabay",
+      "Audio is used under the applicable Pixabay Content License",
+      "HOOP HAVOC is an independent original game",
       "Copyright © 2026 Jinhao Du. All rights reserved."
     ]
   },

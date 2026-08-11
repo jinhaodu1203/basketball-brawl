@@ -7,6 +7,8 @@ import random
 
 import pygame
 
+from audio import get_audio
+
 from constants import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -1410,6 +1412,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     if scorer.score >= WINNING_SCORE:
                         game_over = True
                         winner = scorer
+
+                        # 比赛结束：停止比赛 BGM，播放一次胜利音乐。
+                        get_audio().play_music(
+                            "win",
+                            loops=0,
+                            fade_ms=250,
+                        )
                     else:
                         round_reset_timer = ROUND_RESET_DELAY_FRAMES
 
@@ -1480,6 +1489,9 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     shot_clock_violation_timer = (
                         SHOT_CLOCK_VIOLATION_NOTICE_FRAMES
                     )
+
+                    # 进攻时间到，播放裁判哨声。
+                    get_audio().play_sfx("whistle")
 
         if shot_clock_violation_timer > 0:
             shot_clock_violation_timer -= 1

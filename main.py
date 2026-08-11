@@ -5,6 +5,8 @@ import sys
 
 import pygame
 
+from audio import init_audio, get_audio
+
 from constants import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
 from game import play_session
 from settings import load_settings, save_settings
@@ -87,8 +89,10 @@ def create_screen(fullscreen: bool):
 
 
 def apply_audio_settings(settings) -> None:
-    if pygame.mixer.get_init():
-        pygame.mixer.music.set_volume(settings.master_volume / 100.0)
+    audio = get_audio()
+    audio.set_master_volume(settings.master_volume)
+    audio.set_music_volume(settings.music_volume)
+    audio.set_sfx_volume(settings.sfx_volume)
 
 
 def main():
@@ -107,13 +111,23 @@ def main():
     font, small_font, title_font = create_fonts(settings.language)
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     clock = pygame.time.Clock()
+
+    # 初始化 HOOP HAVOC 音频系统。
+    audio = init_audio(assets_dir)
     apply_audio_settings(settings)
+    audio.play_music("menu")
 
     running = True
     while running:
         action = main_menu(screen, font, small_font, title_font)
 
         if action == "play":
+            # 从主菜单音乐切换到比赛音乐。
+            audio.play_music(
+                "match",
+                fade_ms=450,
+            )
+
             play_session(
                 screen,
                 font,
@@ -121,6 +135,12 @@ def main():
                 title_font,
                 assets_dir,
                 show_fps=settings.show_fps,
+            )
+
+            # 比赛结束 / 返回菜单。
+            audio.play_music(
+                "menu",
+                fade_ms=450,
             )
         elif action == "how_to_play":
             if how_to_play_menu(screen, font, small_font, title_font) == "quit":

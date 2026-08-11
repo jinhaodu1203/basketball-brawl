@@ -5,6 +5,8 @@ import math
 import random
 import pygame
 
+from audio import get_audio
+
 from localization import create_font, tr
 
 from constants import (
@@ -109,6 +111,18 @@ class FeedbackManager:
         self.particles = []
 
     def trigger(self, event_type, x=None, y=None, text=None):
+        # 音效与视觉反馈使用同一个游戏事件。
+        # 即使该事件没有文字/震屏，也可以拥有音效。
+        if event_type == "rim_soft":
+            # 篮球已经第一次砸框后继续在篮圈上颠。
+            # 使用同一个 rim.mp3，但明显降低音量。
+            get_audio().play_sfx(
+                "rim",
+                volume_scale=0.35,
+            )
+        else:
+            get_audio().play_sfx(event_type)
+
         style = EVENT_STYLE.get(event_type)
         if style is None:
             return

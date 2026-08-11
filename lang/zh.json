@@ -30,7 +30,10 @@
     "fullscreen": "全屏：{value}",
     "volume": "主音量：{value}%",
     "show_fps": "显示帧率：{value}",
-    "help": "使用左右键调整选项，修改会自动保存。"
+    "help": "左右键调节数值；音量会实时预览并自动保存。",
+    "master_volume": "总音量：{value}%",
+    "music_volume": "音乐音量：{value}%",
+    "sfx_volume": "音效音量：{value}%"
   },
   "how": {
     "title": "操作说明",
@@ -81,21 +84,23 @@
     "creator_lines": [
       "创作与总制作：杜近豪 Jinhao Du（David）",
       "独立游戏开发项目",
-      "原创概念：2D 篮球大乱斗"
+      "原创游戏：《篮界狂潮 / HOOP HAVOC》"
     ],
     "development_lines": [
       "程序开发：Python + Pygame",
       "玩法设计、平衡与测试：杜近豪",
-      "当前版本：正式交付版本"
+      "当前版本：V3.3 开发版本"
     ],
     "thanks_lines": [
       "Pygame 社区与开源贡献者",
-      "参与每次版本测试的朋友和玩家",
-      "美国东北大学社区"
+      "音频素材来源：Pixabay（pixabay.com）",
+      "胜利音效：PuyoPuyoMegaFan1234 / Pixabay",
+      "参与版本测试的朋友和玩家"
     ],
     "notice_lines": [
-      "正式商业美术、音乐和字体必须拥有授权",
-      "《篮球大乱斗》为独立原创项目",
+      "部分音乐与音效素材来源于 Pixabay",
+      "音频素材按照对应 Pixabay Content License 使用",
+      "《篮界狂潮 / HOOP HAVOC》为独立原创游戏",
       "版权所有 © 2026 杜近豪。保留所有权利。"
     ]
   },

@@ -6,6 +6,8 @@ import webbrowser
 from urllib.parse import quote
 import pygame
 
+from audio import get_audio
+
 from constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
     COLOR_TEXT,
@@ -1758,11 +1760,36 @@ def feedback_menu(screen, font, small_font, title_font):
         pygame.key.stop_text_input()
 
 def settings_menu(screen, font, small_font, title_font, settings):
-    items = ["language", "fullscreen", "volume", "show_fps", "back"]
+    get_audio().set_music_scale(1.0)
+
+    items = [
+        "language",
+        "fullscreen",
+        "master_volume",
+        "music_volume",
+        "sfx_volume",
+        "show_fps",
+        "back",
+    ]
     selected = 0
     clock = pygame.time.Clock()
+
+    def apply_live_audio():
+        audio = get_audio()
+        audio.set_master_volume(settings.master_volume)
+        audio.set_music_volume(settings.music_volume)
+        audio.set_sfx_volume(settings.sfx_volume)
+
+    def change_volume(item, delta):
+        current = int(getattr(settings, item))
+        setattr(settings, item, max(0, min(100, current + delta)))
+        apply_live_audio()
+
     while True:
-        rects = [pygame.Rect(SCREEN_WIDTH // 2 - 220, 125 + i * 66, 440, 50) for i in range(len(items))]
+        rects = [
+            pygame.Rect(SCREEN_WIDTH // 2 - 220, 103 + i * 55, 440, 44)
+            for i in range(len(items))
+        ]
         hovered = _mouse_selected(rects)
         if hovered is not None:
             selected = hovered
@@ -1770,54 +1797,97 @@ def settings_menu(screen, font, small_font, title_font, settings):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return settings, "quit"
+
             clicked = _clicked_index(event, rects)
             activate = clicked is not None
             if clicked is not None:
                 selected = clicked
-            if event.type == pygame.MOUSEWHEEL and items[selected] == "volume":
-                settings.master_volume = max(0, min(100, settings.master_volume + event.y * 5))
+
+            if event.type == pygame.MOUSEWHEEL and items[selected] in (
+                "master_volume",
+                "music_volume",
+                "sfx_volume",
+            ):
+                change_volume(items[selected], event.y * 5)
+
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w): selected = (selected - 1) % len(items)
-                elif event.key in (pygame.K_DOWN, pygame.K_s): selected = (selected + 1) % len(items)
-                elif event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
-                    if items[selected] == "volume":
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    selected = (selected - 1) % len(items)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    selected = (selected + 1) % len(items)
+                elif event.key in (
+                    pygame.K_LEFT,
+                    pygame.K_a,
+                    pygame.K_RIGHT,
+                    pygame.K_d,
+                ):
+                    if items[selected] in (
+                        "master_volume",
+                        "music_volume",
+                        "sfx_volume",
+                    ):
                         delta = -5 if event.key in (pygame.K_LEFT, pygame.K_a) else 5
-                        settings.master_volume = max(0, min(100, settings.master_volume + delta))
+                        change_volume(items[selected], delta)
                     elif items[selected] == "language":
                         settings.language = "zh" if settings.language == "en" else "en"
                         set_language(settings.language)
                         font, small_font, title_font = create_fonts(settings.language)
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE): activate = True
-                elif event.key == pygame.K_ESCAPE: return settings, "apply"
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    activate = True
+                elif event.key == pygame.K_ESCAPE:
+                    return settings, "apply"
+
             if activate:
-                if items[selected] == "language":
+                item = items[selected]
+                if item == "language":
                     settings.language = "zh" if settings.language == "en" else "en"
                     set_language(settings.language)
                     font, small_font, title_font = create_fonts(settings.language)
-                elif items[selected] == "fullscreen": settings.fullscreen = not settings.fullscreen
-                elif items[selected] == "volume": settings.master_volume = (settings.master_volume + 10) % 110
-                elif items[selected] == "show_fps": settings.show_fps = not settings.show_fps
-                elif items[selected] == "back": return settings, "apply"
+                elif item == "fullscreen":
+                    settings.fullscreen = not settings.fullscreen
+                elif item in (
+                    "master_volume",
+                    "music_volume",
+                    "sfx_volume",
+                ):
+                    current = int(getattr(settings, item))
+                    next_value = (current + 10) % 110
+                    change_volume(item, next_value - current)
+                elif item == "show_fps":
+                    settings.show_fps = not settings.show_fps
+                elif item == "back":
+                    return settings, "apply"
 
         _draw_backdrop(screen, (62, 151, 255))
         title = title_font.render(tr("settings.title"), True, COLOR_TEXT)
-        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 70)))
-        _draw_panel(screen, pygame.Rect(SCREEN_WIDTH // 2 - 250, 105, 500, 350), accent=(62, 151, 255), alpha=210)
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 56)))
+
+        _draw_panel(
+            screen,
+            pygame.Rect(SCREEN_WIDTH // 2 - 250, 82, 500, 410),
+            accent=(62, 151, 255),
+            alpha=210,
+        )
+
         on, off = tr("common.on"), tr("common.off")
         lang_value = tr("settings.language_zh") if settings.language == "zh" else tr("settings.language_en")
         values = [
             tr("settings.language", value=lang_value),
             tr("settings.fullscreen", value=on if settings.fullscreen else off),
-            tr("settings.volume", value=settings.master_volume),
+            tr("settings.master_volume", value=settings.master_volume),
+            tr("settings.music_volume", value=settings.music_volume),
+            tr("settings.sfx_volume", value=settings.sfx_volume),
             tr("settings.show_fps", value=on if settings.show_fps else off),
             tr("common.back"),
         ]
+
         for index, label in enumerate(values):
             _draw_menu_button(screen, font, label, rects[index], index == selected)
-        help_text = small_font.render(tr("settings.help"), True, (175, 185, 205))
-        screen.blit(help_text, help_text.get_rect(center=(SCREEN_WIDTH // 2, 485)))
-        pygame.display.flip(); clock.tick(FPS)
 
+        help_text = small_font.render(tr("settings.help"), True, (175, 185, 205))
+        screen.blit(help_text, help_text.get_rect(center=(SCREEN_WIDTH // 2, 516)))
+        pygame.display.flip()
+        clock.tick(FPS)
 
 def draw_scoreboard(screen, font, p1, p2):
     panel = pygame.Surface((510, 58), pygame.SRCALPHA)
@@ -1874,6 +1944,9 @@ def draw_win_overlay(screen, font, title_font, small_font, winner, single_player
 
 
 def select_mode(screen, font, title_font):
+    # 模式选择恢复完整 BGM。
+    get_audio().set_music_scale(1.0)
+
     """开始游戏后的模式选择：1 AI、2 双人、3 训练营。"""
     clock = pygame.time.Clock()
     selected = 0
@@ -1949,6 +2022,9 @@ def select_mode(screen, font, title_font):
 
 
 def select_character(screen, font, small_font, title_font, player_label):
+    # 选人阶段 BGM = 当前音乐音量的 50%。
+    get_audio().set_music_scale(0.5)
+
     """Scalable focus-carousel character select.
 
     One character is featured in the center with full-size art and complete
@@ -2237,6 +2313,9 @@ def select_character(screen, font, small_font, title_font, player_label):
         clock.tick(FPS)
 
 def select_arena(screen, font, small_font, title_font):
+    # 球场选择恢复完整 BGM。
+    get_audio().set_music_scale(1.0)
+
     clock = pygame.time.Clock()
     selected = 0
     card_w, card_h, gap = 270, 290, 25
@@ -2363,6 +2442,9 @@ def select_arena(screen, font, small_font, title_font):
 
 
 def select_difficulty(screen, font, title_font):
+    # 难度选择恢复完整 BGM。
+    get_audio().set_music_scale(1.0)
+
     clock = pygame.time.Clock()
     selected = 1
     values = ["easy", "normal", "hard"]

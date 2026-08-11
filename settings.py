@@ -11,12 +11,16 @@ from dataclasses import asdict, dataclass
 class GameSettings:
     fullscreen: bool = False
     master_volume: int = 80
+    music_volume: int = 100
+    sfx_volume: int = 100
     show_fps: bool = False
     language: str = "en"
 
     def normalize(self) -> None:
         self.fullscreen = bool(self.fullscreen)
         self.master_volume = max(0, min(100, int(self.master_volume)))
+        self.music_volume = max(0, min(100, int(self.music_volume)))
+        self.sfx_volume = max(0, min(100, int(self.sfx_volume)))
         self.show_fps = bool(self.show_fps)
         self.language = self.language if self.language in ("en", "zh") else "en"
 
@@ -35,6 +39,8 @@ def load_settings() -> GameSettings:
             data = json.load(file)
         settings.fullscreen = data.get("fullscreen", settings.fullscreen)
         settings.master_volume = data.get("master_volume", settings.master_volume)
+        settings.music_volume = data.get("music_volume", settings.music_volume)
+        settings.sfx_volume = data.get("sfx_volume", settings.sfx_volume)
         settings.show_fps = data.get("show_fps", settings.show_fps)
         settings.language = data.get("language", settings.language)
     except (OSError, ValueError, TypeError):

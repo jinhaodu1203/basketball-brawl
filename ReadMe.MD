@@ -1,10 +1,10 @@
-# Basketball Brawl
+# HOOP HAVOC / 篮界狂潮
 
-一款使用 **Python + Pygame** 开发的 2D 街机篮球对战游戏。
+一款由 **Jinhao Du（David / 杜近豪）** 独立开发、使用 **Python + Pygame** 制作的 2D 街机街头篮球对战游戏。
 
-玩家可以选择不同角色，在多张球场地图中完成投篮、扣篮、抢断、篮板和盖帽，并使用每个角色独有的技能进行对战。
+玩家可以选择 DJH、BRAX、KAGE、DUKE，在 Sunset Court、Neon District、Skyline Arena 中进行投篮、扣篮、抢断、篮板、盖帽、角色技能与半场规则对抗。
 
-> Current Build: **V3.0 Development Build**
+> Current Build: **V3.3 Development Build**
 
 ---
 
@@ -80,7 +80,7 @@ AI 难度：
 - 命中时可以让对手掉球
 - 技能键：玩家 1 `Left Shift` / 玩家 2 `Right Ctrl`
 
-### Gorilla
+### BRAX
 
 力量型角色。
 
@@ -91,7 +91,7 @@ AI 难度：
 - 可以震掉对手手中的篮球
 - 技能带有震屏和视觉反馈
 
-### Ninja
+### KAGE
 
 敏捷型角色。
 
@@ -99,6 +99,19 @@ AI 难度：
 
 - 可以在空中进行二段跳
 - 适合抢篮板、盖帽和空中进攻
+
+
+### DUKE
+
+战术型角色。
+
+**专属技能：Blood Echo / Mirror Clone**
+
+- 召唤 Blood Echo 作为临时队友
+- DUKE 与 Blood Echo 可以互相传球
+- 传球后控制权切换到接球者
+- AI DUKE 会根据防守压力和传球线路使用分身
+- Blood Echo 会独立跑位并参与进攻
 
 ---
 
@@ -113,6 +126,7 @@ AI 难度：
 | 投篮 / 蓄力投篮 | `Space` |
 | 抢断 / 捡球 | `S` |
 | 角色技能 | `Left Shift` |
+| 传球 | `F` |
 
 ### 玩家 2
 
@@ -123,6 +137,7 @@ AI 难度：
 | 投篮 / 蓄力投篮 | `Enter` |
 | 抢断 / 捡球 | `↓` |
 | 角色技能 | `Right Ctrl` |
+| 传球 | `Right Shift` |
 
 ### 通用操作
 
@@ -149,11 +164,11 @@ AI 难度：
 - 松开过晚会投长
 - 蓄力满后会自动出手
 
-三个角色拥有不同的投篮节奏：
+当前角色拥有不同的投篮节奏：
 
 - DJH：完美区域较宽，稳定性较高
-- Gorilla：蓄力较慢，完美区域较窄
-- Ninja：蓄力较快，完美区域中等
+- BRAX：蓄力较慢，完美区域较窄
+- KAGE：蓄力较快，完美区域中等
 
 ---
 
@@ -168,7 +183,7 @@ AI 难度：
 3. 玩家下落
 4. 篮球从上往下穿过篮筐
 
-当前篮筐高度已调整，让三个角色都可以完成正常扣篮。
+当前篮筐高度已调整，让所有角色都可以完成正常扣篮。
 
 ---
 
@@ -205,21 +220,43 @@ AI 难度：
 
 篮球必须从篮筐上方向下穿过，才会被判定为进球。
 
+
+### 防守篮板 CLEAR 规则
+
+如果对方投篮不中并由你抢到防守篮板，必须先持球退出三分线，完成 CLEAR 后才能重新投篮或扣篮。
+
+- 防守篮板：必须退出三分线
+- 进攻篮板：无需重新退出三分线
+- 未完成 CLEAR 时不能投篮或扣篮
+- 屏幕会显示 `CLEAR THE BALL / 请出三分线`
+- 越过三分线后显示 `CLEARED! / 已出三分线！`
+
+### 14 秒 Shot Clock
+
+- 获得新球权：14 秒
+- 防守篮板：重置为 14 秒
+- 进攻篮板：重置为 10 秒
+- DUKE 与 Blood Echo 队内传球不会重置进攻时间
+- 投篮离手后停止计时，允许压哨球完成飞行
+- 进攻超时后球权交给对方并播放裁判哨声
+- 困难 AI 在最后 3 秒进入紧急进攻，最后约 1.5 秒强制尝试出手
+
+
 ---
 
 ## 球场
 
 当前包含三张地图：
 
-### Sunset Street
+### Sunset Court
 
 黄昏街头篮球场。
 
-### Neon Gym
+### Neon District
 
 霓虹风格室内球馆。
 
-### Moon Rooftop
+### Skyline Arena
 
 夜晚城市屋顶球场。
 
@@ -242,6 +279,49 @@ assets/props/hoop.png
 ```
 
 ---
+
+
+## 音乐、音效与第三方素材
+
+V3.3 已加入背景音乐与游戏音效系统，包括：
+
+- 主菜单 BGM
+- 比赛 BGM
+- 比赛胜利音乐
+- 空心入网声
+- 打铁声
+- 篮球反弹
+- 篮板、扣篮、盖帽
+- 角色技能音效
+- 14 秒 Shot Clock 超时哨声
+
+部分音乐与音效素材来源于 **Pixabay**：
+
+https://pixabay.com/
+
+素材按照各自对应的 Pixabay Content License 使用。
+
+胜利音效：
+
+**Winner game sound — PuyoPuyoMegaFan1234 / Pixabay**
+
+来源页面：
+
+https://pixabay.com/sound-effects/film-special-effects-winner-game-sound-404167/
+
+正式发布时会继续保留第三方素材来源与授权记录。
+
+---
+
+### 音量控制
+
+设置页面支持三层音量调节：
+
+- 总音量（Master Volume）
+- 音乐音量（Music Volume）
+- 音效音量（SFX Volume）
+
+角色选择阶段的 BGM 自动降低到当前音乐音量的 50%，离开选人页面后恢复。所有游戏音效统一使用同一个 SFX 音量，不再对单个音效使用独立音量倍率。
 
 ## 本地化
 
@@ -273,8 +353,8 @@ lang/
 | 游戏角色 | 当前模型 |
 |---|---|
 | DJH | Fighter |
-| Gorilla | Samurai |
-| Ninja | Shinobi |
+| BRAX | Samurai |
+| KAGE | Shinobi |
 
 动画状态包括：
 
@@ -369,7 +449,7 @@ basketball-brawl/
 后续计划：
 
 - 完善角色投篮、扣篮和盖帽专属动作
-- 加入音效和背景音乐
+- 继续扩充不同球场的独立 BGM 与角色专属音效
 - 优化篮球旋转和篮网动画
 - 优化 HUD、暂停页和比赛结算页
 - 增加数据统计和成就
@@ -395,6 +475,24 @@ git push origin main
 git tag v3.0
 git push origin v3.0
 ```
+
+---
+
+
+## 游戏创作与素材说明
+
+**HOOP HAVOC / 篮界狂潮** 的游戏设计、程序实现、玩法平衡与项目开发由 **Jinhao Du（David / 杜近豪）** 完成。
+
+开发技术：
+
+- Python
+- Pygame
+
+第三方音乐与音效素材中，部分内容来自：
+
+**Pixabay — https://pixabay.com/**
+
+相关素材在游戏内 Credits 与本 README 中保留来源说明。
 
 ---
 
