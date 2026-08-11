@@ -56,6 +56,13 @@ PLAYER2_CONTROLS = {
 }
 
 
+# ---------- 半场进攻计时器 ----------
+SHOT_CLOCK_FULL_FRAMES = 14 * FPS
+SHOT_CLOCK_OFFENSIVE_REBOUND_FRAMES = 10 * FPS
+SHOT_CLOCK_WARNING_FRAMES = 5 * FPS
+SHOT_CLOCK_VIOLATION_NOTICE_FRAMES = 60
+
+
 def reset_round(player1, player2, ball, arena):
     player1.reset_for_round(arena["player1_spawn_x"])
     player2.reset_for_round(arena["player2_spawn_x"])
@@ -867,6 +874,207 @@ def play_training(
         clock.tick(FPS)
 
 
+
+def _draw_shot_clock(
+    surface,
+    font,
+    small_font,
+    frames_left,
+    active,
+    violation_timer,
+):
+    """绘制 14 秒进攻计时器。"""
+    if active:
+        seconds_left = max(
+            0,
+            math.ceil(frames_left / FPS),
+        )
+    else:
+        seconds_left = 14
+
+    warning = (
+        active
+        and frames_left <= SHOT_CLOCK_WARNING_FRAMES
+    )
+
+    if warning:
+        accent = (255, 80, 72)
+        number_color = (255, 95, 80)
+    else:
+        accent = (255, 184, 70)
+        number_color = (255, 225, 145)
+
+    panel = pygame.Surface(
+        (142, 66),
+        pygame.SRCALPHA,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (5, 10, 22, 220),
+        panel.get_rect(),
+        border_radius=13,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (*accent, 220),
+        panel.get_rect(),
+        width=2,
+        border_radius=13,
+    )
+
+    label = small_font.render(
+        tr("gameplay.shot_clock"),
+        True,
+        (220, 228, 242),
+    )
+
+    number = font.render(
+        str(seconds_left),
+        True,
+        number_color,
+    )
+
+    panel.blit(
+        label,
+        label.get_rect(
+            center=(71, 17),
+        ),
+    )
+
+    panel.blit(
+        number,
+        number.get_rect(
+            center=(71, 45),
+        ),
+    )
+
+    surface.blit(
+        panel,
+        (
+            SCREEN_WIDTH - 158,
+            14,
+        ),
+    )
+
+    if violation_timer > 0:
+        notice = font.render(
+            tr("gameplay.shot_clock_violation"),
+            True,
+            (255, 88, 72),
+        )
+
+        bg = pygame.Surface(
+            (
+                notice.get_width() + 40,
+                notice.get_height() + 22,
+            ),
+            pygame.SRCALPHA,
+        )
+
+        pygame.draw.rect(
+            bg,
+            (5, 10, 22, 225),
+            bg.get_rect(),
+            border_radius=12,
+        )
+
+        pygame.draw.rect(
+            bg,
+            (255, 75, 65, 220),
+            bg.get_rect(),
+            width=2,
+            border_radius=12,
+        )
+
+        bg.blit(
+            notice,
+            notice.get_rect(
+                center=bg.get_rect().center,
+            ),
+        )
+
+        surface.blit(
+            bg,
+            bg.get_rect(
+                center=(
+                    SCREEN_WIDTH // 2,
+                    155,
+                )
+            ),
+        )
+
+
+def _shot_clock_turnover(
+    violator,
+    receiver,
+    ball,
+    arena,
+    receiver_clone=None,
+):
+    """进攻时间到：球权直接交给对方，并从三分线外重新进攻。"""
+
+    # 两队都清除旧的 CLEAR 状态。
+    violator.must_clear_three = False
+    receiver.must_clear_three = False
+
+    violator.clear_feedback_state = None
+    receiver.clear_feedback_state = None
+
+    violator.clear_feedback_timer = 0
+    receiver.clear_feedback_timer = 0
+
+    if receiver_clone is not None:
+        receiver_clone.must_clear_three = False
+        receiver_clone.clear_feedback_state = None
+        receiver_clone.clear_feedback_timer = 0
+
+    # 把新持球队员放到三分线外侧。
+    clear_x = (
+        arena["rim_x"]
+        + arena["three_point_distance"]
+        + 36
+    )
+
+    receiver.x = max(
+        0,
+        min(
+            SCREEN_WIDTH - PLAYER_WIDTH,
+            clear_x - PLAYER_WIDTH / 2,
+        ),
+    )
+
+    receiver.y = (
+        arena["ground_y"]
+        - PLAYER_HEIGHT
+    )
+
+    receiver.vx = 0
+    receiver.vy = 0
+    receiver.on_ground = True
+    receiver.facing_right = False
+
+    # 清除上一回合投篮数据。
+    ball.last_shooter = None
+    ball.shot_distance = 0
+    ball.rebound_available = False
+
+    if hasattr(ball, "rebound_grace_timer"):
+        ball.rebound_grace_timer = 0
+
+    ball.attach_to(receiver)
+
+    # AI 立即进入新的进攻回合。
+    receiver.ai_state = "offense_setup"
+    receiver.ai_state_timer = 0
+    receiver.ai_offense_timer = 0
+    receiver.ai_shot_target = None
+    receiver.ai_attack_choice = None
+    receiver.ai_shot_cooldown = 0
+    receiver.ai_rebound_exit_timer = 0
+
+
 def play_session(screen, font, small_font, title_font, assets_dir, show_fps=False):
     while True:
         mode = select_mode(screen, font, title_font)
@@ -913,6 +1121,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
     score_popup_timer = 0
     score_popup_points = 0
 
+    # ---------- Shot Clock ----------
+    # 第一次有人真正获得球权后才开始倒计时。
+    shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+    shot_clock_team = None
+    shot_clock_active = False
+    shot_clock_violation_timer = 0
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -939,6 +1154,12 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                         round_reset_timer = 0
                         score_popup_timer = 0
                         score_popup_points = 0
+
+                        shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                        shot_clock_team = None
+                        shot_clock_active = False
+                        shot_clock_violation_timer = 0
+
                         feedback = FeedbackManager()
 
                 elif event.key == pygame.K_ESCAPE and game_over:
@@ -955,6 +1176,11 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     duke_clones = {player1: None, player2: None}
                     active_bodies = {player1: player1, player2: player2}
                     players = [player1, player2]
+
+                    shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                    shot_clock_team = None
+                    shot_clock_active = False
+
             else:
                 keys = pygame.key.get_pressed()
 
@@ -1115,6 +1341,8 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                             # 自己投丢后自己抢到：
                             # 属于进攻篮板，可以直接二次进攻。
                             if shooter_owner is not rebound_owner:
+                                # 防守篮板：
+                                # 新球权 14 秒，并且必须先 CLEAR。
                                 _set_team_clear_required(
                                     rebound_owner,
                                     duke_clones.get(
@@ -1122,8 +1350,26 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                                     ),
                                     True,
                                 )
+
+                                shot_clock_team = rebound_owner
+                                shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                                shot_clock_active = True
+
+                            else:
+                                # 进攻篮板：
+                                # 同一支球队继续进攻，但重置为 10 秒。
+                                shot_clock_team = rebound_owner
+                                shot_clock_frames = (
+                                    SHOT_CLOCK_OFFENSIVE_REBOUND_FRAMES
+                                )
+                                shot_clock_active = True
                 else:
                     scorer = _team_score_owner(scorer)
+
+                    # 得分后当前进攻回合结束。
+                    shot_clock_active = False
+                    shot_clock_team = None
+
                     scorer.score += points
                     score_popup_points = points
                     score_popup_timer = SCORE_POPUP_DURATION_FRAMES
@@ -1132,6 +1378,77 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                         winner = scorer
                     else:
                         round_reset_timer = ROUND_RESET_DELAY_FRAMES
+
+        # ==================================================
+        # Shot Clock 更新
+        # ==================================================
+        if (
+            not game_over
+            and round_reset_timer <= 0
+            and not feedback.gameplay_frozen
+        ):
+            current_possession_team = None
+
+            if (
+                ball.state == "held"
+                and ball.holder is not None
+            ):
+                current_possession_team = _team_score_owner(
+                    ball.holder
+                )
+
+            # 第一次持球，或者抢断/截断导致球权真正改变。
+            if current_possession_team is not None:
+                if shot_clock_team is None:
+                    shot_clock_team = current_possession_team
+                    shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                    shot_clock_active = True
+
+                elif current_possession_team is not shot_clock_team:
+                    shot_clock_team = current_possession_team
+                    shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                    shot_clock_active = True
+
+            # 持球和队内传球期间继续走表。
+            # 投篮已经离手进入 flying 后停止倒计时，
+            # 因此压哨出手仍允许篮球完成本次飞行。
+            clock_running = (
+                shot_clock_active
+                and shot_clock_team is not None
+                and ball.state in ("held", "passing")
+            )
+
+            if clock_running:
+                shot_clock_frames -= 1
+
+                if shot_clock_frames <= 0:
+                    violator = shot_clock_team
+
+                    receiver = (
+                        player2
+                        if violator is player1
+                        else player1
+                    )
+
+                    _shot_clock_turnover(
+                        violator,
+                        receiver,
+                        ball,
+                        arena,
+                        duke_clones.get(receiver),
+                    )
+
+                    active_bodies[receiver] = receiver
+
+                    shot_clock_team = receiver
+                    shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
+                    shot_clock_active = True
+                    shot_clock_violation_timer = (
+                        SHOT_CLOCK_VIOLATION_NOTICE_FRAMES
+                    )
+
+        if shot_clock_violation_timer > 0:
+            shot_clock_violation_timer -= 1
 
         for player in players:
             for event_type, event_x, event_y in player.consume_events():
@@ -1163,6 +1480,15 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
             player.draw(world_surface, small_font)
         ball.draw(world_surface)
         draw_scoreboard(world_surface, font, player1, player2)
+
+        _draw_shot_clock(
+            world_surface,
+            font,
+            small_font,
+            shot_clock_frames,
+            shot_clock_active,
+            shot_clock_violation_timer,
+        )
         draw_score_popup(
             world_surface,
             title_font,
