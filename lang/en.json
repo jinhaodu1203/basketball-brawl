@@ -145,7 +145,11 @@
     "block": "BLOCK!",
     "dunk": "DUNK!!",
     "rebound": "REBOUND!",
-    "double_jump": "SHADOW JUMP!"
+    "double_jump": "SHADOW JUMP!",
+    "shot_perfect": "PERFECT!",
+    "shot_good": "GOOD",
+    "shot_early": "EARLY",
+    "shot_late": "LATE"
   },
   "characters": {
     "djh": {

@@ -145,7 +145,11 @@
     "block": "盖帽！",
     "dunk": "暴扣！！",
     "rebound": "篮板！",
-    "double_jump": "影子跳跃！"
+    "double_jump": "影子跳跃！",
+    "shot_perfect": "完美出手！",
+    "shot_good": "不错",
+    "shot_early": "出手过早",
+    "shot_late": "出手过晚"
   },
   "characters": {
     "djh": {

@@ -240,18 +240,53 @@ class Player:
         hoop_y = self.arena["rim_y"]
         charge_ratio = max(0.0, min(1.0, self.shot_charge / self.shot_charge_max))
 
+        # ---------- 投篮时机反馈 ----------
+        # PERFECT：完全进入绿色完美区。
+        # GOOD：非常接近绿色区，仍属于不错的出手。
+        # EARLY / LATE：明显过早或过晚。
+        good_margin = 0.08
+
         if self.shot_perfect_min <= charge_ratio <= self.shot_perfect_max:
+            shot_feedback = "shot_perfect"
             horizontal_error = 0.0
+
         elif charge_ratio < self.shot_perfect_min:
-            miss_ratio = (self.shot_perfect_min - charge_ratio) / max(
-                0.01, self.shot_perfect_min
+            distance_to_green = self.shot_perfect_min - charge_ratio
+
+            if distance_to_green <= good_margin:
+                shot_feedback = "shot_good"
+            else:
+                shot_feedback = "shot_early"
+
+            miss_ratio = distance_to_green / max(
+                0.01,
+                self.shot_perfect_min,
             )
             horizontal_error = self.shot_error_scale * miss_ratio
+
         else:
-            miss_ratio = (charge_ratio - self.shot_perfect_max) / max(
-                0.01, 1.0 - self.shot_perfect_max
+            distance_to_green = charge_ratio - self.shot_perfect_max
+
+            if distance_to_green <= good_margin:
+                shot_feedback = "shot_good"
+            else:
+                shot_feedback = "shot_late"
+
+            miss_ratio = distance_to_green / max(
+                0.01,
+                1.0 - self.shot_perfect_max,
             )
             horizontal_error = -self.shot_error_scale * miss_ratio
+
+        # 只在真人蓄力投篮时显示时机反馈。
+        feedback_x, feedback_y = self.center()
+        self.events.append(
+            (
+                shot_feedback,
+                feedback_x,
+                feedback_y - 55,
+            )
+        )
 
         target_x = hoop_x + horizontal_error
         target_y = hoop_y

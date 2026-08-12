@@ -27,6 +27,44 @@ from constants import (
 
 
 EVENT_STYLE = {
+    # ---------- 投篮时机反馈 ----------
+    # 只显示文字，不震屏、不顿帧、不闪光。
+    "shot_perfect": {
+        "text": "feedback.shot_perfect",
+        "color": (90, 255, 145),
+        "shake": 0,
+        "shake_frames": 0,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 0,
+    },
+    "shot_good": {
+        "text": "feedback.shot_good",
+        "color": (110, 205, 255),
+        "shake": 0,
+        "shake_frames": 0,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 0,
+    },
+    "shot_early": {
+        "text": "feedback.shot_early",
+        "color": (255, 205, 90),
+        "shake": 0,
+        "shake_frames": 0,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 0,
+    },
+    "shot_late": {
+        "text": "feedback.shot_late",
+        "color": (255, 125, 100),
+        "shake": 0,
+        "shake_frames": 0,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 0,
+    },
     # 只保留“角色技能”和“进球”反馈。所有震屏都控制在轻微范围内。
     "score": {
         "text": "feedback.score",

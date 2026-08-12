@@ -25,7 +25,7 @@ from ball import Ball
 from characters import get_character
 from arenas import get_arena, draw_arena
 from feedback import FeedbackManager
-from localization import tr
+from localization import tr, get_language
 from ui import (
     select_mode,
     select_character,
@@ -1100,6 +1100,240 @@ def _shot_clock_turnover(
     receiver.ai_rebound_exit_timer = 0
 
 
+
+def _draw_controls_hud(surface, small_font, single_player):
+    # 左右分组式操作 HUD。
+    is_zh = get_language() == "zh"
+
+    if is_zh:
+        p1_left = [
+            ("A/D", "移动"),
+            ("W", "跳跃"),
+        ]
+        p1_right = [
+            ("SPACE", "投篮"),
+            ("S", "抢断"),
+            ("SHIFT", "技能"),
+            ("F", "传球"),
+        ]
+
+        p2_left = [
+            ("←/→", "移动"),
+            ("↑", "跳跃"),
+        ]
+        p2_right = [
+            ("ENTER", "投篮"),
+            ("↓", "抢断"),
+            ("RCTRL", "技能"),
+            ("RSHIFT", "传球"),
+        ]
+
+        hide_hint = "H  隐藏"
+    else:
+        p1_left = [
+            ("A/D", "Move"),
+            ("W", "Jump"),
+        ]
+        p1_right = [
+            ("SPACE", "Shoot"),
+            ("S", "Steal"),
+            ("SHIFT", "Ability"),
+            ("F", "Pass"),
+        ]
+
+        p2_left = [
+            ("←/→", "Move"),
+            ("↑", "Jump"),
+        ]
+        p2_right = [
+            ("ENTER", "Shoot"),
+            ("↓", "Steal"),
+            ("RCTRL", "Ability"),
+            ("RSHIFT", "Pass"),
+        ]
+
+        hide_hint = "H  Hide"
+
+    rows = [
+        ("P1", p1_left, p1_right)
+    ]
+
+    if not single_player:
+        rows.append(
+            ("P2", p2_left, p2_right)
+        )
+
+    width = 930
+    row_height = 38
+    height = 14 + row_height * len(rows)
+
+    panel = pygame.Surface(
+        (width, height),
+        pygame.SRCALPHA,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (5, 10, 20, 160),
+        panel.get_rect(),
+        border_radius=12,
+    )
+
+    pygame.draw.rect(
+        panel,
+        (255, 255, 255, 30),
+        panel.get_rect(),
+        width=1,
+        border_radius=12,
+    )
+
+    def draw_item(x, y, key_name, action_name):
+        key_surface = small_font.render(
+            key_name,
+            True,
+            (248, 250, 255),
+        )
+
+        key_rect = pygame.Rect(
+            x,
+            y,
+            key_surface.get_width() + 16,
+            25,
+        )
+
+        pygame.draw.rect(
+            panel,
+            (255, 255, 255, 25),
+            key_rect,
+            border_radius=6,
+        )
+
+        pygame.draw.rect(
+            panel,
+            (255, 255, 255, 52),
+            key_rect,
+            width=1,
+            border_radius=6,
+        )
+
+        panel.blit(
+            key_surface,
+            key_surface.get_rect(
+                center=key_rect.center
+            ),
+        )
+
+        action_surface = small_font.render(
+            action_name,
+            True,
+            (208, 219, 235),
+        )
+
+        action_x = key_rect.right + 7
+
+        panel.blit(
+            action_surface,
+            (
+                action_x,
+                y + 4,
+            ),
+        )
+
+        return (
+            action_x
+            + action_surface.get_width()
+            + 20
+        )
+
+    y = 7
+
+    for title, left_items, right_items in rows:
+        # P1 / P2 标签
+        title_box = pygame.Rect(
+            12,
+            y,
+            38,
+            26,
+        )
+
+        pygame.draw.rect(
+            panel,
+            (255, 145, 55, 48),
+            title_box,
+            border_radius=7,
+        )
+
+        title_surface = small_font.render(
+            title,
+            True,
+            (255, 195, 95),
+        )
+
+        panel.blit(
+            title_surface,
+            title_surface.get_rect(
+                center=title_box.center
+            ),
+        )
+
+        # 左组：移动 / 跳跃
+        x = 62
+
+        for key_name, action_name in left_items:
+            x = draw_item(
+                x,
+                y,
+                key_name,
+                action_name,
+            )
+
+        # 中间分隔线
+        divider_x = 330
+
+        pygame.draw.line(
+            panel,
+            (255, 255, 255, 38),
+            (divider_x, y + 3),
+            (divider_x, y + 23),
+            1,
+        )
+
+        # 右组：投篮 / 抢断 / 技能 / 传球
+        x = divider_x + 20
+
+        for key_name, action_name in right_items:
+            x = draw_item(
+                x,
+                y,
+                key_name,
+                action_name,
+            )
+
+        y += row_height
+
+    hint_surface = small_font.render(
+        hide_hint,
+        True,
+        (125, 142, 168),
+    )
+
+    panel.blit(
+        hint_surface,
+        (
+            width - hint_surface.get_width() - 12,
+            height - hint_surface.get_height() - 6,
+        ),
+    )
+
+    surface.blit(
+        panel,
+        (
+            SCREEN_WIDTH // 2 - width // 2,
+            SCREEN_HEIGHT - height - 8,
+        ),
+    )
+
+
 def play_session(screen, font, small_font, title_font, assets_dir, show_fps=False):
     while True:
         mode = select_mode(screen, font, title_font)
@@ -1146,6 +1380,10 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
     score_popup_timer = 0
     score_popup_points = 0
 
+    # ---------- 对局按键 HUD ----------
+    # 默认显示；玩家可随时按 H 开关。
+    show_controls_hud = True
+
     # ---------- Shot Clock ----------
     # 第一次有人真正获得球权后才开始倒计时。
     shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
@@ -1160,7 +1398,10 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                 sys.exit()
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE and not game_over:
+                if event.key == pygame.K_h and not game_over:
+                    show_controls_hud = not show_controls_hud
+
+                elif event.key == pygame.K_ESCAPE and not game_over:
                     result = pause_menu(screen, font, title_font)
                     if result == "quit":
                         pygame.quit()
@@ -1526,6 +1767,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
             player.draw(world_surface, small_font)
         ball.draw(world_surface)
         draw_scoreboard(world_surface, font, player1, player2)
+
+        if show_controls_hud:
+            _draw_controls_hud(
+                world_surface,
+                small_font,
+                single_player,
+            )
 
         _draw_shot_clock(
             world_surface,
