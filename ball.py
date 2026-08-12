@@ -132,6 +132,15 @@ class Ball:
         self.last_shooter = shooter
         self.shot_distance = shot_distance
 
+        # ---------- V3.5 投篮统计 ----------
+        shooter.fg_attempts = getattr(shooter, "fg_attempts", 0) + 1
+        if shot_distance > self.arena["three_point_distance"]:
+            shooter.three_attempts = getattr(
+                shooter,
+                "three_attempts",
+                0,
+            ) + 1
+
         # 半场规则：
         # 防守篮板后必须先退出三分线。
         # 出手瞬间还没有完成 clear，则这一球即使进框也不计分。
@@ -337,6 +346,11 @@ class Ball:
         rim_x = self.arena["rim_x"]
         rim_y = self.arena["rim_y"]
         self.pending_score = (player, points)
+
+        # 扣篮也属于一次两分球出手并命中。
+        player.fg_attempts = getattr(player, "fg_attempts", 0) + 1
+        player.fg_made = getattr(player, "fg_made", 0) + 1
+
         self.clear_pass()
         self.last_shooter = player
         self.state = "loose"
@@ -382,6 +396,16 @@ class Ball:
             if self.shot_distance > self.arena["three_point_distance"]
             else POINTS_ON_OR_INSIDE_THREE
         )
+
+        if scorer is not None:
+            scorer.fg_made = getattr(scorer, "fg_made", 0) + 1
+            if self.shot_distance > self.arena["three_point_distance"]:
+                scorer.three_made = getattr(
+                    scorer,
+                    "three_made",
+                    0,
+                ) + 1
+
         self.state = "loose"
         self.clear_pass()
         self.vx = 0

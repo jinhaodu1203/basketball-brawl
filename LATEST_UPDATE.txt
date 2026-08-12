@@ -1,23 +1,37 @@
-HOOP HAVOC
-Fullscreen and Carousel Position Fix
+HOOP HAVOC / 篮界狂潮
+V3.5 - Match Statistics Update
+2026-08-12
 
-FULLSCREEN
---------
-- Forces SDL software rendering before Pygame initializes.
-- Uses FULLSCREEN | SCALED to preserve the 960x540 logical resolution.
-- Removes the plain FULLSCREEN fallback that caused the game to appear only
-  in the upper-left corner with a large black area.
-- Returns safely to windowed mode if scaled fullscreen is unavailable.
+【核心规则】
+- 三分线外投篮调整为 3 分
+- 三分线内投篮调整为 2 分
+- 上篮与扣篮均为 2 分
+- 取消 1 分得分
+- 胜利条件调整为率先达到 21 分
 
-MAIN MENU CHARACTERS
---------
-- Moves all three rotating characters upward by 20 pixels.
-- Keeps current character sizes unchanged.
-- Keeps the orange baseline at y=512.
-- Keeps the BRAX/DJH/KAGE name plate unchanged.
-- Character feet no longer touch the orange baseline.
+【投篮系统】
+- 新增 PERFECT 完美出手反馈
+- 新增 GOOD 良好出手反馈
+- 新增 EARLY 出手过早反馈
+- 新增 LATE 出手过晚反馈
 
-FILES TO REPLACE
---------
-main.py
-ui.py
+【对局 UI】
+- 新增比赛内操作按键 HUD
+- HUD 改为左右分组式键帽设计
+- 支持 H 键显示 / 隐藏操作提示
+- 支持中文与 English 自动切换
+
+【比赛统计】
+- 新增比赛结算统计页面
+- 新增 FG 命中 / 出手统计
+- 新增 3PT 命中 / 出手统计
+- 新增篮板统计
+- 新增抢断统计
+- 新增盖帽统计
+- 新增扣篮统计
+- 结算页面显示双方最终比分与胜者
+
+【修复与优化】
+- 修复达到胜利分数后进入统计页面导致的闪退
+- 修复结算页 FG / 3PT 统计字段错误
+- 优化对局操作提示的布局和视觉效果

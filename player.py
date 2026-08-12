@@ -65,6 +65,14 @@ class Player:
         self.rebound_cooldown_timer = 0
         self.dunk_cooldown_timer = 0
         self.dunks = 0
+
+        # ---------- V3.5 比赛统计 ----------
+        self.fg_attempts = 0
+        self.fg_made = 0
+        self.three_attempts = 0
+        self.three_made = 0
+        self.steals = 0
+
         self.arena = arena or {
             "ground_y": GROUND_Y, "rim_x": HOOP_X + HOOP_WIDTH / 2,
             "rim_y": HOOP_Y + HOOP_HEIGHT / 2, "hoop_width": HOOP_WIDTH,
@@ -316,6 +324,7 @@ class Player:
                 ball.attach_to(self)
                 self.possession_immune_timer = PASS_RECEIVE_IMMUNITY_FRAMES
                 self.steal_cooldown_timer = STEAL_COOLDOWN_FRAMES
+                self.steals += 1
                 self.events.append(("steal", ball.x, ball.y))
             return
 
@@ -352,6 +361,8 @@ class Player:
             ball.attach_to(self)
             self.possession_immune_timer = POSSESSION_COOLDOWN_FRAMES
             self.steal_cooldown_timer = STEAL_COOLDOWN_FRAMES
+            self.steals += 1
+            self.events.append(("steal", ball.x, ball.y))
 
     def _handle_pass(self, pass_pressed, ball, target=None):
         """上升沿触发一次传球；无队友时保持持球，不会误操作。"""

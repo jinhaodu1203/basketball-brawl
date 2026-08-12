@@ -1334,6 +1334,213 @@ def _draw_controls_hud(surface, small_font, single_player):
     )
 
 
+def _draw_match_stats_overlay(
+    surface,
+    font,
+    small_font,
+    title_font,
+    player1,
+    player2,
+    winner,
+):
+    """V3.5 比赛结束统计面板。"""
+
+    overlay = pygame.Surface(
+        (SCREEN_WIDTH, SCREEN_HEIGHT),
+        pygame.SRCALPHA,
+    )
+    overlay.fill((2, 6, 15, 205))
+    surface.blit(overlay, (0, 0))
+
+    panel = pygame.Rect(135, 70, 690, 405)
+
+    pygame.draw.rect(
+        surface,
+        (8, 15, 30),
+        panel,
+        border_radius=22,
+    )
+
+    pygame.draw.rect(
+        surface,
+        (255, 142, 55),
+        panel,
+        width=2,
+        border_radius=22,
+    )
+
+    win_text = (
+        "比赛结束"
+        if get_language() == "zh"
+        else "FINAL"
+    )
+
+    title = title_font.render(
+        win_text,
+        True,
+        (255, 205, 90),
+    )
+
+    surface.blit(
+        title,
+        title.get_rect(
+            center=(SCREEN_WIDTH // 2, 105)
+        ),
+    )
+
+    winner_text = (
+        "获胜"
+        if get_language() == "zh"
+        else "WINNER"
+    )
+
+    winner_name = winner.character_name
+
+    winner_surface = font.render(
+        f"{winner_text}  •  {winner_name}",
+        True,
+        (110, 255, 160),
+    )
+
+    surface.blit(
+        winner_surface,
+        winner_surface.get_rect(
+            center=(SCREEN_WIDTH // 2, 145)
+        ),
+    )
+
+    left_name = small_font.render(
+        player1.character_name,
+        True,
+        (255, 170, 80),
+    )
+
+    right_name = small_font.render(
+        player2.character_name,
+        True,
+        (100, 190, 255),
+    )
+
+    surface.blit(
+        left_name,
+        left_name.get_rect(center=(280, 187)),
+    )
+
+    surface.blit(
+        right_name,
+        right_name.get_rect(center=(680, 187)),
+    )
+
+    labels = (
+        [
+            "得分",
+            "投篮",
+            "三分",
+            "篮板",
+            "抢断",
+            "盖帽",
+            "扣篮",
+        ]
+        if get_language() == "zh"
+        else [
+            "SCORE",
+            "FG",
+            "3PT",
+            "REB",
+            "STL",
+            "BLK",
+            "DUNK",
+        ]
+    )
+
+    p1_values = [
+        str(player1.score),
+        f"{getattr(player1, 'fg_made', 0)}/{getattr(player1, 'fg_attempts', 0)}",
+        f"{getattr(player1, 'three_made', 0)}/{getattr(player1, 'three_attempts', 0)}",
+        str(getattr(player1, "rebounds", 0)),
+        str(getattr(player1, "steals", 0)),
+        str(getattr(player1, "blocks", 0)),
+        str(getattr(player1, "dunks", 0)),
+    ]
+
+    p2_values = [
+        str(player2.score),
+        f"{getattr(player2, 'fg_made', 0)}/{getattr(player2, 'fg_attempts', 0)}",
+        f"{getattr(player2, 'three_made', 0)}/{getattr(player2, 'three_attempts', 0)}",
+        str(getattr(player2, "rebounds", 0)),
+        str(getattr(player2, "steals", 0)),
+        str(getattr(player2, "blocks", 0)),
+        str(getattr(player2, "dunks", 0)),
+    ]
+
+    y = 222
+
+    for label, left, right in zip(
+        labels,
+        p1_values,
+        p2_values,
+    ):
+        left_surface = font.render(
+            left,
+            True,
+            (240, 245, 255),
+        )
+
+        label_surface = small_font.render(
+            label,
+            True,
+            (145, 165, 195),
+        )
+
+        right_surface = font.render(
+            right,
+            True,
+            (240, 245, 255),
+        )
+
+        surface.blit(
+            left_surface,
+            left_surface.get_rect(
+                center=(280, y)
+            ),
+        )
+
+        surface.blit(
+            label_surface,
+            label_surface.get_rect(
+                center=(480, y)
+            ),
+        )
+
+        surface.blit(
+            right_surface,
+            right_surface.get_rect(
+                center=(680, y)
+            ),
+        )
+
+        y += 34
+
+    hint_text = (
+        "ENTER / R  返回菜单    ESC  返回菜单"
+        if get_language() == "zh"
+        else "ENTER / R  RETURN TO MENU    ESC  RETURN"
+    )
+
+    hint = small_font.render(
+        hint_text,
+        True,
+        (150, 165, 190),
+    )
+
+    surface.blit(
+        hint,
+        hint.get_rect(
+            center=(SCREEN_WIDTH // 2, 455)
+        ),
+    )
+
+
 def play_session(screen, font, small_font, title_font, assets_dir, show_fps=False):
     while True:
         mode = select_mode(screen, font, title_font)
@@ -1804,14 +2011,14 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
         feedback.draw_overlay(screen, title_font)
 
         if game_over:
-            draw_win_overlay(
+            _draw_match_stats_overlay(
                 screen,
                 font,
-                title_font,
                 small_font,
-                winner,
-                single_player,
+                title_font,
                 player1,
+                player2,
+                winner,
             )
 
         if show_fps:
