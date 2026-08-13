@@ -65,6 +65,10 @@ class Ball:
         self.dribble_phase = 0.0
         self.dribble_side = 1
 
+        # V3.8 篮球旋转
+        self.rotation_angle = 0.0
+        self.rotation_speed = 0.0
+
         self.arena = arena or {
             "ground_y": GROUND_Y, "rim_x": HOOP_X + HOOP_WIDTH / 2,
             "rim_y": HOOP_Y + HOOP_HEIGHT / 2, "hoop_width": HOOP_WIDTH,
@@ -97,6 +101,7 @@ class Ball:
         self.vy = 0
         self.dribble_phase = 0.0
         self.dribble_side = 1 if player.facing_right else -1
+        self.rotation_speed = 0.0
 
     def pass_to(self, receiver, passer):
         """把球以真实抛物线传向接球队友。返回是否成功发起传球。"""
@@ -122,6 +127,11 @@ class Ball:
         self.pass_catch_delay = 4
         self.vx = dx / frames
         self.vy = (dy - 0.5 * GRAVITY * frames ** 2) / frames
+
+        # 传球快速旋转。
+        self.rotation_speed = (
+            13.0 if self.vx >= 0 else -13.0
+        )
 
         self.events.append(
             ("pass", self.x, self.y)
@@ -172,6 +182,11 @@ class Ball:
         frames = SHOT_FLIGHT_FRAMES
         self.vx = (target_x - self.x) / frames
         self.vy = (target_y - self.y - 0.5 * GRAVITY * frames ** 2) / frames
+
+        # 跳投带明显后旋。
+        self.rotation_speed = (
+            11.5 if self.vx >= 0 else -11.5
+        )
 
         self.events.append(
             ("shot", self.x, self.y)
@@ -224,6 +239,11 @@ class Ball:
             - 0.5 * GRAVITY * frames ** 2
         ) / frames
 
+        # 上篮旋转比跳投柔和。
+        self.rotation_speed = (
+            7.5 if self.vx >= 0 else -7.5
+        )
+
         self.events.append(
             ("shot", self.x, self.y)
         )
@@ -255,6 +275,10 @@ class Ball:
         impulse = -(1 + RIM_BOUNCE_DAMPING) * velocity_along_normal
         self.vx += impulse * normal_x
         self.vy += impulse * normal_y
+
+        # 碰框后旋转方向和速度产生变化。
+        self.rotation_speed *= -0.72
+
         return True
 
     def _handle_hoop_collisions(self):
@@ -409,6 +433,33 @@ class Ball:
             self.vx = 0
             self.vy = 0
 
+            # 运球时篮球也持续转动。
+            # EMA 的慢速运球会自然同步降低旋转速度。
+            held_spin_multiplier = getattr(
+                holder,
+                "character_config",
+                {},
+            ).get(
+                "dribble_speed_multiplier",
+                1.0,
+            )
+
+            if charging or airborne:
+                spin_rate = 2.0
+            else:
+                spin_rate = 5.2 * held_spin_multiplier
+
+            spin_direction = (
+                1.0
+                if hand_side > 0
+                else -1.0
+            )
+
+            self.rotation_angle = (
+                self.rotation_angle
+                + spin_rate * spin_direction
+            ) % 360.0
+
             # 不要在这里再次把 previous_x / previous_y 覆盖成当前坐标。
             # update() 开头已经保存了上一帧位置；扣篮判定需要依赖
             # “上一帧在篮筐上方，本帧向下穿过篮筐高度”。
@@ -417,6 +468,25 @@ class Ball:
         self.vy += GRAVITY
         self.x += self.vx
         self.y += self.vy
+
+        # 飞行中的篮球持续旋转。
+        if self.state in ("flying", "passing"):
+            self.rotation_angle = (
+                self.rotation_angle
+                + self.rotation_speed
+            ) % 360.0
+        else:
+            # 自由球根据水平速度保持轻微滚动感。
+            target_spin = self.vx * 1.7
+            self.rotation_speed = (
+                self.rotation_speed * 0.90
+                + target_spin * 0.10
+            )
+
+            self.rotation_angle = (
+                self.rotation_angle
+                + self.rotation_speed
+            ) % 360.0
 
         if self.state == "passing":
             if self.pass_catch_delay > 0:
@@ -454,6 +524,7 @@ class Ball:
             self.y = self.arena["ground_y"] - self.radius
             self.vy *= -BALL_BOUNCE_DAMPING
             self.vx *= 0.85
+            self.rotation_speed *= 0.76
 
             if impact_speed >= 4.0:
                 self.events.append(
@@ -549,11 +620,91 @@ class Ball:
         return events
 
     def draw(self, screen):
+        size = self.radius * 2
+
         if self.frames:
-            frame_index = BALL_STATE_TO_FRAME.get(self.state, 0)
-            frame_img = self.frames[frame_index % len(self.frames)]
-            frame_img = pygame.transform.scale(frame_img, (self.radius * 2, self.radius * 2))
-            screen.blit(frame_img, frame_img.get_rect(center=(int(self.x), int(self.y))))
+            frame_index = BALL_STATE_TO_FRAME.get(
+                self.state,
+                0,
+            )
+
+            frame_img = self.frames[
+                frame_index % len(self.frames)
+            ]
+
+            frame_img = pygame.transform.scale(
+                frame_img,
+                (size, size),
+            )
+
         else:
-            pygame.draw.circle(screen, COLOR_BALL, (int(self.x), int(self.y)), self.radius)
-            pygame.draw.circle(screen, (0, 0, 0), (int(self.x), int(self.y)), self.radius, 1)
+            # 没有图片素材时也绘制可见球纹，
+            # 这样旋转效果仍然看得出来。
+            frame_img = pygame.Surface(
+                (size + 4, size + 4),
+                pygame.SRCALPHA,
+            )
+
+            center = (
+                frame_img.get_width() // 2,
+                frame_img.get_height() // 2,
+            )
+
+            pygame.draw.circle(
+                frame_img,
+                COLOR_BALL,
+                center,
+                self.radius,
+            )
+
+            pygame.draw.circle(
+                frame_img,
+                (20, 15, 10),
+                center,
+                self.radius,
+                1,
+            )
+
+            pygame.draw.line(
+                frame_img,
+                (35, 20, 10),
+                (
+                    center[0],
+                    center[1] - self.radius,
+                ),
+                (
+                    center[0],
+                    center[1] + self.radius,
+                ),
+                2,
+            )
+
+            pygame.draw.line(
+                frame_img,
+                (35, 20, 10),
+                (
+                    center[0] - self.radius,
+                    center[1],
+                ),
+                (
+                    center[0] + self.radius,
+                    center[1],
+                ),
+                2,
+            )
+
+        rotated = pygame.transform.rotozoom(
+            frame_img,
+            self.rotation_angle,
+            1.0,
+        )
+
+        screen.blit(
+            rotated,
+            rotated.get_rect(
+                center=(
+                    int(self.x),
+                    int(self.y),
+                )
+            ),
+        )

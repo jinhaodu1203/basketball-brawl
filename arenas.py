@@ -5,6 +5,7 @@
 """
 
 import os
+import math
 import pygame
 
 from constants import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT
@@ -176,6 +177,299 @@ def draw_arena(screen, arena, assets_dir):
 
     arena["_rendered_surface"] = canvas
     screen.blit(canvas, (0, 0))
+
+
+def trigger_hoop_net(arena, strength=1.0):
+    """进球后触发篮网摆动。"""
+    strength = max(
+        0.5,
+        min(1.6, float(strength)),
+    )
+
+    duration = (
+        54
+        if strength >= 1.25
+        else 44
+    )
+
+    arena["_net_timer"] = duration
+    arena["_net_duration"] = duration
+    arena["_net_strength"] = strength
+
+
+def update_hoop_net(arena):
+    """更新篮网摆动时间。"""
+    timer = int(
+        arena.get(
+            "_net_timer",
+            0,
+        )
+    )
+
+    if timer > 0:
+        timer -= 1
+        arena["_net_timer"] = timer
+
+    if timer <= 0:
+        arena["_net_timer"] = 0
+        arena["_net_strength"] = 0.0
+
+
+def draw_dynamic_hoop_net(screen, arena):
+    """只在进球/扣篮后叠加动态篮网。"""
+
+    timer = int(
+        arena.get(
+            "_net_timer",
+            0,
+        )
+    )
+
+    if timer <= 0:
+        return
+
+    duration = max(
+        1,
+        int(
+            arena.get(
+                "_net_duration",
+                44,
+            )
+        ),
+    )
+
+    strength = float(
+        arena.get(
+            "_net_strength",
+            1.0,
+        )
+    )
+
+    age = duration - timer
+    decay = timer / duration
+
+    rim_x = float(
+        arena["rim_x"]
+    )
+
+    rim_y = float(
+        arena["rim_y"]
+    )
+
+    top_width = float(
+        arena["hoop_width"]
+    )
+
+    bottom_width = (
+        top_width * 0.50
+    )
+
+    # 左右摆动逐渐减弱。
+    sway = (
+        math.sin(age * 0.72)
+        * 12.0
+        * decay
+        * strength
+    )
+
+    # 进球后篮网先被向下拉长再回弹。
+    stretch = (
+        abs(
+            math.sin(
+                age * 0.32
+            )
+        )
+        * 9.0
+        * decay
+        * strength
+    )
+
+    net_height = (
+        40.0 + stretch
+    )
+
+    fx_width = 132
+    fx_height = 96
+
+    fx = pygame.Surface(
+        (
+            fx_width,
+            fx_height,
+        ),
+        pygame.SRCALPHA,
+    )
+
+    cx = fx_width / 2
+    top_y = 7.0
+
+    alpha = max(
+        35,
+        int(
+            205
+            * decay
+        ),
+    )
+
+    main_color = (
+        240,
+        245,
+        255,
+        alpha,
+    )
+
+    soft_color = (
+        210,
+        225,
+        245,
+        max(
+            20,
+            int(alpha * 0.66),
+        ),
+    )
+
+    # --------------------------------------------------------
+    # 纵向篮网线
+    # --------------------------------------------------------
+    line_count = 8
+
+    for i in range(line_count):
+        t = (
+            i
+            / (line_count - 1)
+        )
+
+        top_x = (
+            cx
+            - top_width / 2
+            + top_width * t
+        )
+
+        bottom_x = (
+            cx
+            - bottom_width / 2
+            + bottom_width * t
+            + sway
+        )
+
+        middle_x_1 = (
+            top_x * 0.67
+            + bottom_x * 0.33
+            + sway * 0.08
+        )
+
+        middle_x_2 = (
+            top_x * 0.34
+            + bottom_x * 0.66
+            + sway * 0.16
+        )
+
+        points = [
+            (
+                int(top_x),
+                int(top_y),
+            ),
+            (
+                int(middle_x_1),
+                int(
+                    top_y
+                    + net_height * 0.34
+                ),
+            ),
+            (
+                int(middle_x_2),
+                int(
+                    top_y
+                    + net_height * 0.67
+                ),
+            ),
+            (
+                int(bottom_x),
+                int(
+                    top_y
+                    + net_height
+                ),
+            ),
+        ]
+
+        pygame.draw.lines(
+            fx,
+            main_color,
+            False,
+            points,
+            2,
+        )
+
+    # --------------------------------------------------------
+    # 横向篮网线
+    # --------------------------------------------------------
+    for row in range(1, 5):
+        t = row / 5.0
+
+        width_here = (
+            top_width * (1.0 - t)
+            + bottom_width * t
+        )
+
+        center_shift = (
+            sway * (t ** 1.55)
+        )
+
+        wave = (
+            math.sin(
+                age * 0.55
+                + row * 1.15
+            )
+            * 2.5
+            * decay
+            * strength
+        )
+
+        y = (
+            top_y
+            + net_height * t
+            + wave
+        )
+
+        left_x = (
+            cx
+            - width_here / 2
+            + center_shift
+        )
+
+        right_x = (
+            cx
+            + width_here / 2
+            + center_shift
+        )
+
+        pygame.draw.line(
+            fx,
+            soft_color,
+            (
+                int(left_x),
+                int(y),
+            ),
+            (
+                int(right_x),
+                int(y),
+            ),
+            2,
+        )
+
+    screen.blit(
+        fx,
+        (
+            int(
+                rim_x
+                - fx_width / 2
+            ),
+            int(
+                rim_y
+                - top_y
+            ),
+        ),
+    )
+
 
 def _draw_theme_details(screen, arena):
     if arena["id"] == "street":

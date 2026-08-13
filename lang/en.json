@@ -155,7 +155,10 @@
     "layup": "LAYUP!",
     "deadeye": "DEADEYE!",
     "petrify": "STONE GAZE!",
-    "petrified": "PETRIFIED!"
+    "petrified": "PETRIFIED!",
+    "shot_open": "OPEN",
+    "shot_contested": "CONTESTED",
+    "shot_heavy": "HEAVILY CONTESTED"
   },
   "characters": {
     "djh": {

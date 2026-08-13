@@ -23,7 +23,13 @@ from constants import (
 from player import Player
 from ball import Ball
 from characters import get_character
-from arenas import get_arena, draw_arena
+from arenas import (
+    get_arena,
+    draw_arena,
+    trigger_hoop_net,
+    update_hoop_net,
+    draw_dynamic_hoop_net,
+)
 from feedback import FeedbackManager
 from localization import tr, get_language
 from ui import (
@@ -933,6 +939,13 @@ def play_training(
             ball.update()
 
             scorer, scored_points = ball.check_score()
+
+            if scorer is not None:
+                trigger_hoop_net(
+                    arena,
+                    1.45 if dunked else 1.0,
+                )
+
             if scorer is not None and _team_score_owner(scorer) is player:
                 made += 1
                 points += scored_points
@@ -959,12 +972,17 @@ def play_training(
             feedback.trigger(event_type, event_x, event_y)
 
         feedback.update()
+        update_hoop_net(arena)
 
         draw_arena(world_surface, arena, assets_dir)
         player.draw(world_surface, small_font)
         if duke_clone is not None:
             duke_clone.draw(world_surface, small_font)
         ball.draw(world_surface)
+        draw_dynamic_hoop_net(
+            world_surface,
+            arena,
+        )
 
         panel = pygame.Surface((250, 132), pygame.SRCALPHA)
         pygame.draw.rect(panel, (5, 10, 22, 205), panel.get_rect(), border_radius=14)
@@ -1943,6 +1961,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     active_bodies[player2].try_block_ball(ball)
 
                 scorer, points = ball.check_score()
+
+                if scorer is not None:
+                    trigger_hoop_net(
+                        arena,
+                        1.50 if dunked else 1.0,
+                    )
+
                 if scorer is None:
                     rebounder = resolve_rebound(
                         player1,
@@ -2152,11 +2177,16 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     clear_owner.clear_feedback_state = None
 
         feedback.update()
+        update_hoop_net(arena)
 
         draw_arena(world_surface, arena, assets_dir)
         for player in players:
             player.draw(world_surface, small_font)
         ball.draw(world_surface)
+        draw_dynamic_hoop_net(
+            world_surface,
+            arena,
+        )
         draw_scoreboard(world_surface, font, player1, player2)
 
         if show_controls_hud:

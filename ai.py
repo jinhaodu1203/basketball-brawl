@@ -238,6 +238,18 @@ def _shoot(player, ball):
 
     my_cx, my_cy = player.center()
     shot_distance = math.hypot(my_cx - hoop_x, my_cy - hoop_y)
+    if hasattr(
+        player,
+        "_show_shot_contest_feedback",
+    ):
+        player._show_shot_contest_feedback(
+            getattr(
+                player,
+                "shot_contest_opponent",
+                None,
+            )
+        )
+
     ball.shoot_towards(target_x, target_y, player, shot_distance)
 
     player.ai_shot_target = None

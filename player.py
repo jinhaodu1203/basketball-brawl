@@ -30,6 +30,7 @@ from constants import (
     PASS_INTERCEPT_RADIUS, PASS_RECEIVE_IMMUNITY_FRAMES,
 )
 from animation import load_character_animations, draw_procedural_character
+from localization import tr
 
 
 class Player:
@@ -173,6 +174,11 @@ class Player:
         # 当前正在影响投篮的防守者。
         # 用于动态计算绿色 PERFECT 窗口。
         self.shot_contest_opponent = None
+
+        # V3.8 投篮干扰反馈
+        self.last_shot_contest_value = 0.0
+        self.shot_contest_feedback_key = None
+        self.shot_contest_feedback_timer = 0
 
         self.ai_controlled = ai_controlled
         self.ai_shot_target = None
@@ -493,6 +499,7 @@ class Player:
         # 3. 防守干扰
         # ====================================================
         contest_multiplier = 1.0
+        contest = 0.0
 
         if opponent is not None:
             opp_x, opp_y = opponent.center()
@@ -618,8 +625,48 @@ class Player:
             perfect_max,
         )
 
+        # 保存当前实际防守干扰强度，
+        # 给 V3.8 OPEN / CONTESTED UI 使用。
+        self.last_shot_contest_value = contest
+
         return perfect_min, perfect_max
 
+
+
+    def _show_shot_contest_feedback(
+        self,
+        opponent=None,
+    ):
+        """显示出手瞬间的防守干扰等级。"""
+
+        # 使用和动态绿窗完全相同的算法。
+        self._get_dynamic_shot_window(
+            opponent
+        )
+
+        contest = max(
+            0.0,
+            min(
+                1.0,
+                getattr(
+                    self,
+                    "last_shot_contest_value",
+                    0.0,
+                ),
+            ),
+        )
+
+        if contest < 0.22:
+            key = "feedback.shot_open"
+
+        elif contest < 0.68:
+            key = "feedback.shot_contested"
+
+        else:
+            key = "feedback.shot_heavy"
+
+        self.shot_contest_feedback_key = key
+        self.shot_contest_feedback_timer = 48
 
 
     def _release_charged_shot(self, ball):
@@ -640,6 +687,10 @@ class Player:
         )
 
         perfect_min, perfect_max = self._get_dynamic_shot_window(
+            self.shot_contest_opponent
+        )
+
+        self._show_shot_contest_feedback(
             self.shot_contest_opponent
         )
 
@@ -1133,6 +1184,10 @@ class Player:
             + (shooter_y - hoop_center_y) ** 2
         ) ** 0.5
 
+        self._show_shot_contest_feedback(
+            self.shot_contest_opponent
+        )
+
         ball.shoot_towards(
             target_x,
             target_y,
@@ -1439,6 +1494,12 @@ class Player:
         if self.petrify_effect_timer > 0:
             self.petrify_effect_timer -= 1
 
+        if self.shot_contest_feedback_timer > 0:
+            self.shot_contest_feedback_timer -= 1
+
+            if self.shot_contest_feedback_timer <= 0:
+                self.shot_contest_feedback_key = None
+
         self.update_animation()
 
     def reset_for_round(self, x):
@@ -1469,6 +1530,9 @@ class Player:
         self.double_jump_available = False
         self.is_charging_shot = False
         self.shot_charge = 0.0
+        self.last_shot_contest_value = 0.0
+        self.shot_contest_feedback_key = None
+        self.shot_contest_feedback_timer = 0
         self.ai_shot_target = None
         self.ai_state = "seek_ball"
         self.ai_state_timer = 0
@@ -1884,6 +1948,98 @@ class Player:
                     + 2,
                 ),
                 3,
+            )
+
+        # ====================================================
+        # V3.8 SHOT CONTEST BADGE
+        # ====================================================
+        if (
+            self.shot_contest_feedback_timer > 0
+            and self.shot_contest_feedback_key
+        ):
+            contest_colors = {
+                "feedback.shot_open": (
+                    105,
+                    255,
+                    150,
+                ),
+                "feedback.shot_contested": (
+                    255,
+                    210,
+                    85,
+                ),
+                "feedback.shot_heavy": (
+                    255,
+                    100,
+                    85,
+                ),
+            }
+
+            contest_color = contest_colors.get(
+                self.shot_contest_feedback_key,
+                (
+                    240,
+                    245,
+                    255,
+                ),
+            )
+
+            contest_text = font.render(
+                tr(
+                    self.shot_contest_feedback_key
+                ),
+                True,
+                contest_color,
+            )
+
+            contest_bg = pygame.Surface(
+                (
+                    contest_text.get_width() + 16,
+                    contest_text.get_height() + 6,
+                ),
+                pygame.SRCALPHA,
+            )
+
+            pygame.draw.rect(
+                contest_bg,
+                (
+                    5,
+                    10,
+                    20,
+                    190,
+                ),
+                contest_bg.get_rect(),
+                border_radius=7,
+            )
+
+            pygame.draw.rect(
+                contest_bg,
+                (
+                    *contest_color,
+                    170,
+                ),
+                contest_bg.get_rect(),
+                width=1,
+                border_radius=7,
+            )
+
+            contest_bg.blit(
+                contest_text,
+                contest_text.get_rect(
+                    center=contest_bg.get_rect().center
+                ),
+            )
+
+            contest_pos = contest_bg.get_rect(
+                midbottom=(
+                    rect.centerx,
+                    rect.y - 42,
+                )
+            )
+
+            screen.blit(
+                contest_bg,
+                contest_pos,
             )
 
         prefix = "AI" if self.ai_controlled else self.name.split(" - ")[0]

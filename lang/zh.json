@@ -155,7 +155,10 @@
     "layup": "上篮！",
     "deadeye": "致命准星！",
     "petrify": "石化凝视！",
-    "petrified": "石化！"
+    "petrified": "石化！",
+    "shot_open": "空位",
+    "shot_contested": "受干扰",
+    "shot_heavy": "强干扰"
   },
   "characters": {
     "djh": {
