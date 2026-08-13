@@ -2,9 +2,9 @@
 
 一款由 **Jinhao Du（David / 杜近豪）** 独立开发、使用 **Python + Pygame** 制作的 2D 街机街头篮球对战游戏。
 
-玩家可以选择 DJH、BRAX、KAGE、DUKE，在 Sunset Court、Neon District、Skyline Arena 中进行投篮、扣篮、抢断、篮板、盖帽、角色技能与半场规则对抗。
+玩家可以选择 DJH、BRAX、KAGE、DUKE、ACE、1MA / EMA，在 Sunset Court、Neon District、Skyline Arena 中进行投篮、扣篮、抢断、篮板、盖帽、角色技能与半场规则对抗。
 
-> Current Build: **V3.3 Development Build**
+> Current Build: **V3.7 Development Build**
 
 ---
 
@@ -113,6 +113,41 @@ AI 难度：
 - AI DUKE 会根据防守压力和传球线路使用分身
 - Blood Echo 会独立跑位并参与进攻
 
+
+### ACE
+
+顶级外线射手。
+
+**专属技能：Deadeye**
+
+- 拥有更大的基础投篮绿色区域
+- 投篮绿窗会根据距离和防守压力动态变化
+- Deadeye 激活后短时间扩大完美出手区域
+- 绿色完美出手可以获得最高级别的投篮奖励
+- 使用 Samurai Archer 像素角色模型
+- 主页拥有拉弓瞄准展示动画
+
+
+
+### 1MA / EMA
+
+控制与防守型角色。
+
+**专属技能：石化凝视 / Petrifying Gaze**
+
+- 使用 Gorgon 美杜莎像素角色模型
+- 向角色正面释放石化凝视
+- 有效距离约 210px
+- 凝视区域约 70°
+- 命中后暂时石化对手
+- 石化期间对手无法移动、跳跃、投篮或使用技能
+- 石化不会让持球者自动掉球
+- 拥有独立的绿色凝视视觉效果
+- 运球动画与篮球弹跳采用更舒缓的角色专属节奏
+- 跳跃时使用专属蛇尾腾空姿势
+- 主页拥有 Special 石化凝视展示动画
+
+
 ---
 
 ## 操作方式
@@ -169,6 +204,10 @@ AI 难度：
 - DJH：完美区域较宽，稳定性较高
 - BRAX：蓄力较慢，完美区域较窄
 - KAGE：蓄力较快，完美区域中等
+
+- DUKE：均衡型投篮节奏，配合 Blood Echo 进行战术进攻
+- ACE：顶级射手，拥有更大的基础绿窗，并可使用 Deadeye 扩大完美区域
+- 1MA / EMA：均衡投射能力，更偏向防守与控制
 
 ---
 
@@ -295,6 +334,8 @@ V3.3 已加入背景音乐与游戏音效系统，包括：
 - 角色技能音效
 - 14 秒 Shot Clock 超时哨声
 
+部分角色 Sprite Sheet 素材来自 **CraftPix**，包括 ACE 的弓箭手模型与 1MA / EMA 的 Gorgon 美杜莎模型。对应授权文件保留在各角色资源目录中。
+
 部分音乐与音效素材来源于 **Pixabay**：
 
 https://pixabay.com/
@@ -355,6 +396,9 @@ lang/
 | DJH | Fighter |
 | BRAX | Samurai |
 | KAGE | Shinobi |
+| DUKE | Vampire / Blood Echo |
+| ACE | Samurai Archer |
+| 1MA / EMA | Gorgon |
 
 动画状态包括：
 
@@ -376,7 +420,11 @@ shield
 assets/characters/
 ├── djh/
 ├── gorilla/
-└── ninja/
+├── ninja/
+├── duke/
+├── duke_blood_echo/
+├── ace/
+└── ema/
 ```
 
 ---
@@ -572,4 +620,52 @@ V3.6 重点强化了比赛节奏、得分反馈和篮下终结体验。
 ### 音频
 - 更新 DUKE Clone 分身音效
 - 保留统一音量系统与独立音效层级
+
+---
+
+## V3.7 角色扩展与展示系统
+
+V3.7 新增两名可操作角色，并进一步完善角色差异化与展示效果。
+
+### ACE
+
+- 新增 ACE 射手角色
+- 新增 Deadeye 专属技能
+- 新增动态投篮绿窗
+- 投篮距离与防守压力会动态影响完美出手区域
+- Deadeye 激活后扩大完美出手窗口
+- 新增 Samurai Archer 人物素材
+- 新增拉弓、瞄准主页展示动作
+
+### 1MA / EMA
+
+- 新增首名女性角色 1MA / EMA
+- 使用 Gorgon 美杜莎人物模型
+- 新增 Petrifying Gaze / 石化凝视
+- 石化使用距离、方向与锥形角度判定
+- 被石化角色短时间无法行动
+- 石化不会直接造成持球掉落
+- 新增绿色凝视与石化视觉反馈
+- 新增美杜莎 Special 专属技能动作
+- 调整 EMA 的移动动画节奏
+- 调整 EMA 的角色专属运球节奏
+- 进一步降低 EMA 持球时篮球弹跳频率
+- 降低移动运球的横向摆动
+- 跳跃改为蛇尾收起的专属腾空姿势
+
+### 角色展示
+
+- 完善角色主页循环展示系统
+- ACE 展示加入拉弓与持续瞄准
+- EMA 展示加入 Special 石化凝视
+- EMA 主页展示保持正常动画速度
+- DJH 展示 Dash 使用强化高速视觉效果
+- 展示特效与正式比赛技能表现相互独立
+
+### 系统
+
+- 当前可选角色增加至 6 名
+- 中英文语言包加入 ACE 与 1MA / EMA
+- 更新角色选择界面
+- 更新角色素材与授权记录
 

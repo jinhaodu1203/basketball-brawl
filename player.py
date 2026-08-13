@@ -53,6 +53,7 @@ class Player:
         self.vy = 0.0
         self.color = color
         self.controls = controls
+        self.shot_contest_opponent = None
         self.facing_right = facing_right
         self.name = name
         self.on_ground = False
@@ -109,6 +110,32 @@ class Player:
         self.ability_cooldown_max = self.character_config.get("ability_cooldown", 0)
         self.ability_cooldown_timer = 0
 
+        # ---------- 1MA / EMA 石化系统 ----------
+        self.petrified_timer = 0
+        self.petrify_effect_timer = 0
+
+        self.petrify_range = self.character_config.get(
+            "petrify_range",
+            210,
+        )
+
+        self.petrify_angle = self.character_config.get(
+            "petrify_angle",
+            70,
+        )
+
+        self.petrify_duration = self.character_config.get(
+            "petrify_duration",
+            48,
+        )
+
+        # ---------- ACE / Deadeye ----------
+        self.deadeye_timer = 0
+        self.deadeye_duration = self.character_config.get(
+            "deadeye_duration",
+            300,
+        )
+
         self.dash_speed = self.character_config.get("dash_speed", DASH_SPEED)
         self.dash_duration_max = self.character_config.get("dash_duration", DASH_DURATION_FRAMES)
         self.is_dashing = False
@@ -142,6 +169,10 @@ class Player:
         )
         self.is_charging_shot = False
         self.shot_charge = 0.0
+
+        # 当前正在影响投篮的防守者。
+        # 用于动态计算绿色 PERFECT 窗口。
+        self.shot_contest_opponent = None
 
         self.ai_controlled = ai_controlled
         self.ai_shot_target = None
@@ -199,6 +230,14 @@ class Player:
         self.ai_three_point_shot_chance = preset["three_point_shot_chance"]
 
     def _apply_horizontal_move(self, direction):
+        # ACE Deadeye 瞄准期间站定。
+        if (
+            self.ability_type == "deadeye"
+            and self.anim_action_state == "deadeye"
+            and self.anim_action_timer > 0
+        ):
+            self.vx = 0
+            return
         if self.is_dashing:
             return
         self.vx = 0
@@ -210,6 +249,13 @@ class Player:
             self.facing_right = True
 
     def _apply_jump(self, want_jump):
+        # ACE Deadeye 瞄准期间不能跳。
+        if (
+            self.ability_type == "deadeye"
+            and self.anim_action_state == "deadeye"
+            and self.anim_action_timer > 0
+        ):
+            return
         if want_jump and self.on_ground:
             self.vy = self.jump_velocity
             self.on_ground = False
@@ -354,6 +400,228 @@ class Player:
         return True
 
 
+    def _get_dynamic_shot_window(self, opponent=None):
+        """所有角色统一使用的动态 PERFECT 绿窗。
+
+        规则：
+        - 距离篮筐越远，绿窗越小
+        - 防守者越靠近，绿窗实时缩小
+        - 防守者起跳干扰时，绿窗进一步缩小
+        - ACE Deadeye 在当前动态绿窗基础上扩大
+        - 最终显示出来的绿色区域 = 100% 命中区域
+        """
+
+        # ====================================================
+        # 1. 角色基础绿窗
+        # ====================================================
+        base_min = self.shot_perfect_min
+        base_max = self.shot_perfect_max
+
+        center = (base_min + base_max) * 0.5
+        base_width = base_max - base_min
+
+        # ACE Deadeye
+        if (
+            getattr(self, "ability_type", None) == "deadeye"
+            and getattr(self, "deadeye_timer", 0) > 0
+        ):
+            # ACE Deadeye：
+            # 本身已经拥有最大的基础绿窗，
+            # 开启技能后再扩大约 70%。
+            base_width *= 1.7
+
+        base_width = min(
+            base_width,
+            0.58,
+        )
+
+        # ====================================================
+        # 2. 投篮距离
+        # ====================================================
+        player_x, player_y = self.center()
+
+        rim_x = self.arena["rim_x"]
+
+        shot_distance = abs(
+            player_x - rim_x
+        )
+
+        # 近距离
+        near_distance = 140.0
+
+        # 中远距离
+        medium_distance = 500.0
+
+        # 半场最远区域
+        far_distance = 820.0
+
+        if shot_distance <= near_distance:
+            distance_multiplier = 1.00
+
+        elif shot_distance <= medium_distance:
+            t = (
+                shot_distance - near_distance
+            ) / (
+                medium_distance - near_distance
+            )
+
+            # 100% -> 60%
+            distance_multiplier = (
+                1.00
+                - 0.40 * t
+            )
+
+        else:
+            t = (
+                shot_distance - medium_distance
+            ) / (
+                far_distance - medium_distance
+            )
+
+            t = max(
+                0.0,
+                min(1.0, t),
+            )
+
+            # 60% -> 25%
+            distance_multiplier = (
+                0.60
+                - 0.35 * t
+            )
+
+        # ====================================================
+        # 3. 防守干扰
+        # ====================================================
+        contest_multiplier = 1.0
+
+        if opponent is not None:
+            opp_x, opp_y = opponent.center()
+
+            dx = opp_x - player_x
+            dy = opp_y - player_y
+
+            defender_distance = (
+                dx * dx
+                + dy * dy
+            ) ** 0.5
+
+            horizontal_distance = abs(dx)
+            vertical_distance = abs(dy)
+
+            # 只有真的靠近投篮者才算干扰。
+            if (
+                horizontal_distance <= 220
+                and vertical_distance <= 160
+            ):
+                contest_range = 220.0
+
+                contest = (
+                    1.0
+                    - defender_distance / contest_range
+                )
+
+                contest = max(
+                    0.0,
+                    min(1.0, contest),
+                )
+
+                # --------------------------------------------
+                # 贴身防守
+                # --------------------------------------------
+                if defender_distance <= 120:
+                    contest += 0.18
+
+                if defender_distance <= 75:
+                    contest += 0.22
+
+                # --------------------------------------------
+                # 防守者站在投篮人与篮筐之间
+                # 干扰略微增强
+                # --------------------------------------------
+                shooter_to_rim = (
+                    rim_x - player_x
+                )
+
+                shooter_to_defender = (
+                    opp_x - player_x
+                )
+
+                defender_in_front = (
+                    shooter_to_rim
+                    * shooter_to_defender
+                    > 0
+                )
+
+                if (
+                    defender_in_front
+                    and defender_distance <= 175
+                ):
+                    contest += 0.12
+
+                # --------------------------------------------
+                # 起跳干扰
+                # --------------------------------------------
+                if (
+                    not getattr(
+                        opponent,
+                        "on_ground",
+                        True,
+                    )
+                    and defender_distance <= 170
+                ):
+                    contest += 0.38
+
+                contest = max(
+                    0.0,
+                    min(1.0, contest),
+                )
+
+                # 无干扰 = 100%
+                # 最强干扰 = 18%
+                contest_multiplier = (
+                    1.0
+                    - 0.82 * contest
+                )
+
+        # ====================================================
+        # 4. 距离 × 防守
+        # ====================================================
+        final_width = (
+            base_width
+            * distance_multiplier
+            * contest_multiplier
+        )
+
+        # 最极端情况下仍留一点绿色。
+        final_width = max(
+            0.025,
+            final_width,
+        )
+
+        perfect_min = (
+            center
+            - final_width * 0.5
+        )
+
+        perfect_max = (
+            center
+            + final_width * 0.5
+        )
+
+        perfect_min = max(
+            0.02,
+            perfect_min,
+        )
+
+        perfect_max = min(
+            0.98,
+            perfect_max,
+        )
+
+        return perfect_min, perfect_max
+
+
+
     def _release_charged_shot(self, ball):
         if ball.state != "held" or ball.holder is not self:
             self.is_charging_shot = False
@@ -362,20 +630,31 @@ class Player:
 
         hoop_x = self.arena["rim_x"]
         hoop_y = self.arena["rim_y"]
-        charge_ratio = max(0.0, min(1.0, self.shot_charge / self.shot_charge_max))
 
-        # ---------- 投篮时机反馈 ----------
-        # PERFECT：完全进入绿色完美区。
-        # GOOD：非常接近绿色区，仍属于不错的出手。
-        # EARLY / LATE：明显过早或过晚。
+        charge_ratio = max(
+            0.0,
+            min(
+                1.0,
+                self.shot_charge / self.shot_charge_max,
+            ),
+        )
+
+        perfect_min, perfect_max = self._get_dynamic_shot_window(
+            self.shot_contest_opponent
+        )
+
         good_margin = 0.08
 
-        if self.shot_perfect_min <= charge_ratio <= self.shot_perfect_max:
+        # ====================================================
+        # GREEN = 100% PERFECT
+        # ====================================================
+        if perfect_min <= charge_ratio <= perfect_max:
             shot_feedback = "shot_perfect"
             horizontal_error = 0.0
+            force_make = True
 
-        elif charge_ratio < self.shot_perfect_min:
-            distance_to_green = self.shot_perfect_min - charge_ratio
+        elif charge_ratio < perfect_min:
+            distance_to_green = perfect_min - charge_ratio
 
             if distance_to_green <= good_margin:
                 shot_feedback = "shot_good"
@@ -384,12 +663,17 @@ class Player:
 
             miss_ratio = distance_to_green / max(
                 0.01,
-                self.shot_perfect_min,
+                perfect_min,
             )
-            horizontal_error = self.shot_error_scale * miss_ratio
+
+            horizontal_error = (
+                self.shot_error_scale * miss_ratio
+            )
+
+            force_make = False
 
         else:
-            distance_to_green = charge_ratio - self.shot_perfect_max
+            distance_to_green = charge_ratio - perfect_max
 
             if distance_to_green <= good_margin:
                 shot_feedback = "shot_good"
@@ -398,12 +682,17 @@ class Player:
 
             miss_ratio = distance_to_green / max(
                 0.01,
-                1.0 - self.shot_perfect_max,
+                1.0 - perfect_max,
             )
-            horizontal_error = -self.shot_error_scale * miss_ratio
 
-        # 只在真人蓄力投篮时显示时机反馈。
+            horizontal_error = (
+                -self.shot_error_scale * miss_ratio
+            )
+
+            force_make = False
+
         feedback_x, feedback_y = self.center()
+
         self.events.append(
             (
                 shot_feedback,
@@ -414,14 +703,25 @@ class Player:
 
         target_x = hoop_x + horizontal_error
         target_y = hoop_y
+
         shooter_x, shooter_y = self.center()
+
         shot_distance = (
-            (shooter_x - hoop_x) ** 2 + (shooter_y - hoop_y) ** 2
+            (shooter_x - hoop_x) ** 2
+            + (shooter_y - hoop_y) ** 2
         ) ** 0.5
 
-        ball.shoot_towards(target_x, target_y, self, shot_distance)
+        ball.shoot_towards(
+            target_x,
+            target_y,
+            self,
+            shot_distance,
+            force_make=force_make,
+        )
+
         self.is_charging_shot = False
         self.shot_charge = 0.0
+
 
     def _apply_steal_or_pickup(self, want_interact, ball):
         """同一个键：无人持球时捡球，对手持球时抢断。"""
@@ -508,6 +808,167 @@ class Player:
             self._use_double_jump()
         elif self.ability_type == "clone":
             self._use_clone()
+        elif self.ability_type == "deadeye":
+            self._use_deadeye()
+        elif self.ability_type == "petrify":
+            self._use_petrify(opponent)
+
+    def _use_deadeye(self):
+        """ACE Deadeye。
+
+        动作：
+        1. 停下
+        2. 自动面向篮筐
+        3. 拉弓
+        4. 拉满后保持瞄准
+        5. Deadeye 进入持续状态
+        """
+
+        if self.ability_cooldown_timer > 0:
+            return
+
+        if self.deadeye_timer > 0:
+            return
+
+        # Deadeye 正式生效。
+        self.deadeye_timer = self.deadeye_duration
+
+        self.ability_cooldown_timer = (
+            self.ability_cooldown_max
+        )
+
+        # ----------------------------------------------------
+        # ACE 放技能时主动面向篮筐。
+        # ----------------------------------------------------
+        rim_x = self.arena["rim_x"]
+        player_x, player_y = self.center()
+
+        self.facing_right = (
+            rim_x > player_x
+        )
+
+        # 停下准备拉弓。
+        self.vx = 0
+
+        # ----------------------------------------------------
+        # 播放8帧 Deadeye 动画。
+        #
+        # 动画系统的动作动画到最后一帧后会停住，
+        # 所以后半段会自然保持在“拉满弓瞄准”姿势。
+        # ----------------------------------------------------
+        self.play_action_animation(
+            "deadeye",
+            70,
+        )
+
+        # 技能反馈。
+        self.events.append(
+            (
+                "deadeye",
+                player_x,
+                player_y - 40,
+            )
+        )
+
+
+
+    def _use_petrify(self, opponent):
+        """1MA / EMA：石化凝视。"""
+
+        if self.ability_cooldown_timer > 0:
+            return False
+
+        self.ability_cooldown_timer = (
+            self.ability_cooldown_max
+        )
+
+        # 绿色凝视视觉持续约0.4秒。
+        self.petrify_effect_timer = 24
+
+        my_x, my_y = self.center()
+
+        # 技能释放提示
+        self.events.append(
+            (
+                "petrify",
+                my_x,
+                my_y - 40,
+            )
+        )
+
+        # 暂时使用现有攻击动作。
+        # 后面换上真正美杜莎素材后再换专属凝视动画。
+        self.play_action_animation(
+            "special",
+            34,
+        )
+
+        if opponent is None:
+            return False
+
+        opp_x, opp_y = opponent.center()
+
+        dx = opp_x - my_x
+        dy = opp_y - my_y
+
+        distance = math.hypot(dx, dy)
+
+        if distance > self.petrify_range:
+            return False
+
+        if distance <= 0.001:
+            distance = 0.001
+
+        # ----------------------------------------------------
+        # 正面 70 度锥形视野
+        # ----------------------------------------------------
+        forward_x = (
+            1.0
+            if self.facing_right
+            else -1.0
+        )
+
+        facing_dot = (
+            dx * forward_x
+        ) / distance
+
+        half_angle = math.radians(
+            self.petrify_angle * 0.5
+        )
+
+        if facing_dot < math.cos(half_angle):
+            return False
+
+        # ----------------------------------------------------
+        # 石化命中
+        # ----------------------------------------------------
+        opponent.petrified_timer = max(
+            getattr(
+                opponent,
+                "petrified_timer",
+                0,
+            ),
+            int(self.petrify_duration),
+        )
+
+        opponent.vx = 0
+
+        opponent.is_charging_shot = False
+        opponent.shot_charge = 0.0
+
+        # 注意：
+        # 不修改 ball.holder，所以持球者不会自动掉球。
+
+        opponent.events.append(
+            (
+                "petrified",
+                opp_x,
+                opp_y - 40,
+            )
+        )
+
+        return True
+
 
     def _use_clone(self):
         """Request Duke's clone. game.py creates the actual clone entity."""
@@ -597,7 +1058,15 @@ class Player:
         self.events.append(("double_jump", self.center()[0], self.y + PLAYER_HEIGHT))
 
     def handle_input(self, keys, ball, opponent=None):
+        self.shot_contest_opponent = opponent
         controls = self.controls
+
+        # EMA_PETRIFIED_PLAYER_LOCK
+        if self.petrified_timer > 0:
+            self.vx = 0
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+            return
         direction = 0
         if keys[controls["left"]]:
             direction = -1
@@ -628,6 +1097,14 @@ class Player:
 
     def handle_ai(self, ball, opponent):
         """AI决策被拆到 ai.py，Player 只负责执行动作。"""
+        self.shot_contest_opponent = opponent
+        # EMA_PETRIFIED_AI_LOCK
+        if self.petrified_timer > 0:
+            self.vx = 0
+            self.is_charging_shot = False
+            self.shot_charge = 0.0
+            return
+
         from ai import update_ai
         update_ai(self, ball, opponent)
 
@@ -936,6 +1413,12 @@ class Player:
             self.steal_cooldown_timer -= 1
         if self.ability_cooldown_timer > 0:
             self.ability_cooldown_timer -= 1
+
+        # ACE Deadeye 每帧持续时间。
+        if self.deadeye_timer > 0:
+            self.deadeye_timer -= 1
+            if self.deadeye_timer < 0:
+                self.deadeye_timer = 0
         if self.slam_effect_timer > 0:
             self.slam_effect_timer -= 1
         if self.dash_hit_cooldown_timer > 0:
@@ -948,6 +1431,13 @@ class Player:
             self.dunk_cooldown_timer -= 1
         if self.ai_rebound_exit_timer > 0:
             self.ai_rebound_exit_timer -= 1
+
+        # EMA_PETRIFY_TIMER
+        if self.petrified_timer > 0:
+            self.petrified_timer -= 1
+
+        if self.petrify_effect_timer > 0:
+            self.petrify_effect_timer -= 1
 
         self.update_animation()
 
@@ -964,6 +1454,10 @@ class Player:
         self.pass_target = None
         self.clone_request_pending = False
         self.ability_cooldown_timer = 0
+
+        # EMA_RESET_PETRIFY
+        self.petrified_timer = 0
+        self.petrify_effect_timer = 0
         self.is_dashing = False
         self.dash_timer = 0
         self.dash_hit_registered = False
@@ -1032,6 +1526,17 @@ class Player:
                 )
                 offset = -18 if self.facing_right else 18
                 screen.blit(trail, sprite_rect.move(offset, 2))
+            # EMA_STONE_SPRITE
+            if self.petrified_timer > 0:
+                stone_sprite = sprite.copy()
+
+                stone_sprite.fill(
+                    (150, 160, 150, 255),
+                    special_flags=pygame.BLEND_RGBA_MULT,
+                )
+
+                sprite = stone_sprite
+
             screen.blit(sprite, sprite_rect)
         else:
             draw_procedural_character(
@@ -1047,6 +1552,218 @@ class Player:
             glow = pygame.Surface((rect.width + 14, rect.height + 14), pygame.SRCALPHA)
             pygame.draw.rect(glow, (*COLOR_DASH_TRAIL, 150), glow.get_rect(), width=2, border_radius=9)
             screen.blit(glow, (rect.x - 7, rect.y - 7))
+
+        # EMA_STONE_OUTLINE
+        if self.petrified_timer > 0:
+            stone_fx = pygame.Surface(
+                (
+                    rect.width + 44,
+                    rect.height + 48,
+                ),
+                pygame.SRCALPHA,
+            )
+
+            scx = stone_fx.get_width() // 2
+            scy = stone_fx.get_height() // 2
+
+            # 石化外圈
+            pygame.draw.ellipse(
+                stone_fx,
+                (145, 180, 150, 145),
+                stone_fx.get_rect(),
+                3,
+            )
+
+            # 石头裂纹
+            cracks = (
+                (
+                    (scx - 15, scy - 24),
+                    (scx - 3, scy - 8),
+                ),
+                (
+                    (scx - 3, scy - 8),
+                    (scx - 13, scy + 7),
+                ),
+                (
+                    (scx + 13, scy - 26),
+                    (scx + 2, scy - 9),
+                ),
+                (
+                    (scx + 2, scy - 9),
+                    (scx + 15, scy + 7),
+                ),
+                (
+                    (scx - 8, scy + 15),
+                    (scx + 6, scy + 30),
+                ),
+            )
+
+            for p1, p2 in cracks:
+                pygame.draw.line(
+                    stone_fx,
+                    (220, 230, 215, 185),
+                    p1,
+                    p2,
+                    2,
+                )
+
+            screen.blit(
+                stone_fx,
+                stone_fx.get_rect(
+                    center=rect.center,
+                ),
+            )
+
+        # ====================================================
+        # EMA_PETRIFY_GAZE_FX
+        # 美杜莎石化凝视
+        # ====================================================
+        if (
+            self.ability_type == "petrify"
+            and self.petrify_effect_timer > 0
+        ):
+            gaze = pygame.Surface(
+                (
+                    SCREEN_WIDTH,
+                    self.arena["ground_y"],
+                ),
+                pygame.SRCALPHA,
+            )
+
+            cx = int(
+                self.x + PLAYER_WIDTH / 2
+            )
+
+            # 眼睛位置比角色中心略高。
+            cy = int(
+                self.y + PLAYER_HEIGHT * 0.30
+            )
+
+            direction = (
+                1
+                if self.facing_right
+                else -1
+            )
+
+            distance = int(
+                self.petrify_range
+            )
+
+            half_height = int(
+                math.tan(
+                    math.radians(
+                        self.petrify_angle / 2
+                    )
+                )
+                * distance
+            )
+
+            end_x = (
+                cx + direction * distance
+            )
+
+            points = [
+                (
+                    cx,
+                    cy,
+                ),
+                (
+                    end_x,
+                    cy - half_height,
+                ),
+                (
+                    end_x,
+                    cy + half_height,
+                ),
+            ]
+
+            # 外层幽绿色视野
+            pygame.draw.polygon(
+                gaze,
+                (
+                    80,
+                    255,
+                    135,
+                    28,
+                ),
+                points,
+            )
+
+            # 边缘光线
+            pygame.draw.line(
+                gaze,
+                (
+                    120,
+                    255,
+                    165,
+                    125,
+                ),
+                (
+                    cx,
+                    cy,
+                ),
+                (
+                    end_x,
+                    cy - half_height,
+                ),
+                2,
+            )
+
+            pygame.draw.line(
+                gaze,
+                (
+                    120,
+                    255,
+                    165,
+                    125,
+                ),
+                (
+                    cx,
+                    cy,
+                ),
+                (
+                    end_x,
+                    cy + half_height,
+                ),
+                2,
+            )
+
+            # 眼睛核心绿光
+            pygame.draw.circle(
+                gaze,
+                (
+                    210,
+                    255,
+                    215,
+                    220,
+                ),
+                (
+                    cx + direction * 8,
+                    cy,
+                ),
+                5,
+            )
+
+            pygame.draw.circle(
+                gaze,
+                (
+                    75,
+                    255,
+                    115,
+                    130,
+                ),
+                (
+                    cx + direction * 8,
+                    cy,
+                ),
+                12,
+                2,
+            )
+
+            screen.blit(
+                gaze,
+                (0, 0),
+            )
 
         if self.slam_effect_timer > 0:
             progress = 1 - self.slam_effect_timer / 20
@@ -1075,34 +1792,97 @@ class Player:
         pygame.draw.rect(screen, accent, (bar_x, rect.y - 11, int(bar_w * ratio), 4), border_radius=2)
 
         if self.is_charging_shot:
-            meter_x = rect.centerx - SHOT_METER_WIDTH // 2
+            meter_x = (
+                rect.centerx
+                - SHOT_METER_WIDTH // 2
+            )
+
             meter_y = rect.y - 19
+
             pygame.draw.rect(
                 screen,
                 SHOT_METER_BG_COLOR,
-                (meter_x, meter_y, SHOT_METER_WIDTH, SHOT_METER_HEIGHT),
+                (
+                    meter_x,
+                    meter_y,
+                    SHOT_METER_WIDTH,
+                    SHOT_METER_HEIGHT,
+                ),
                 border_radius=3,
             )
 
-            perfect_x = meter_x + int(SHOT_METER_WIDTH * self.shot_perfect_min)
+            # 所有角色统一读取动态绿窗
+            meter_min, meter_max = (
+                self._get_dynamic_shot_window(
+                    getattr(
+                        self,
+                        "shot_contest_opponent",
+                        None,
+                    )
+                )
+            )
+
+            perfect_x = (
+                meter_x
+                + int(
+                    SHOT_METER_WIDTH
+                    * meter_min
+                )
+            )
+
             perfect_w = max(
                 2,
-                int(SHOT_METER_WIDTH * (self.shot_perfect_max - self.shot_perfect_min)),
+                int(
+                    SHOT_METER_WIDTH
+                    * (
+                        meter_max
+                        - meter_min
+                    )
+                ),
             )
+
             pygame.draw.rect(
                 screen,
                 SHOT_METER_PERFECT_COLOR,
-                (perfect_x, meter_y, perfect_w, SHOT_METER_HEIGHT),
+                (
+                    perfect_x,
+                    meter_y,
+                    perfect_w,
+                    SHOT_METER_HEIGHT,
+                ),
                 border_radius=2,
             )
 
-            charge_ratio = max(0.0, min(1.0, self.shot_charge / self.shot_charge_max))
-            marker_x = meter_x + int(SHOT_METER_WIDTH * charge_ratio)
+            charge_ratio = max(
+                0.0,
+                min(
+                    1.0,
+                    self.shot_charge
+                    / self.shot_charge_max,
+                ),
+            )
+
+            marker_x = (
+                meter_x
+                + int(
+                    SHOT_METER_WIDTH
+                    * charge_ratio
+                )
+            )
+
             pygame.draw.line(
                 screen,
                 SHOT_METER_COLOR,
-                (marker_x, meter_y - 2),
-                (marker_x, meter_y + SHOT_METER_HEIGHT + 2),
+                (
+                    marker_x,
+                    meter_y - 2,
+                ),
+                (
+                    marker_x,
+                    meter_y
+                    + SHOT_METER_HEIGHT
+                    + 2,
+                ),
                 3,
             )
 

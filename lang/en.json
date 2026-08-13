@@ -152,7 +152,10 @@
     "shot_late": "LATE",
     "score2": "2 POINTS!",
     "score3": "3 POINTER!",
-    "layup": "LAYUP!"
+    "layup": "LAYUP!",
+    "deadeye": "DEADEYE!",
+    "petrify": "STONE GAZE!",
+    "petrified": "PETRIFIED!"
   },
   "characters": {
     "djh": {
@@ -174,6 +177,16 @@
       "name": "DUKE",
       "description": "A playmaker who turns one body into two.",
       "ability": "Mirror Clone"
+    },
+    "ace": {
+      "name": "ACE",
+      "description": "Elite shooter with a larger green window.",
+      "ability": "Deadeye"
+    },
+    "ema": {
+      "name": "EMA",
+      "description": "A defensive controller who can temporarily petrify opponents.",
+      "ability": "Petrifying Gaze"
     }
   },
   "arenas": {

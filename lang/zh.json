@@ -152,7 +152,10 @@
     "shot_late": "出手过晚",
     "score2": "两分命中！",
     "score3": "三分命中！",
-    "layup": "上篮！"
+    "layup": "上篮！",
+    "deadeye": "致命准星！",
+    "petrify": "石化凝视！",
+    "petrified": "石化！"
   },
   "characters": {
     "djh": {
@@ -174,6 +177,16 @@
       "name": "DUKE",
       "description": "能制造分身并与自己完成传切的战术后卫。",
       "ability": "镜像分身"
+    },
+    "ace": {
+      "name": "ACE",
+      "description": "顶级射手，拥有更大的投篮绿窗。",
+      "ability": "致命准星"
+    },
+    "ema": {
+      "name": "1MA",
+      "description": "控制型防守者，能用凝视暂时石化对手。",
+      "ability": "石化凝视"
     }
   },
   "arenas": {

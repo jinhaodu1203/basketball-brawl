@@ -113,6 +113,32 @@ EVENT_STYLE = {
         "flash": None,
         "particle_count": 8,
     },
+    "petrify": {
+        "text": "feedback.petrify",
+        "color": (105, 255, 145),
+        "shake": 2,
+        "shake_frames": 4,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 18,
+        "font_size": 54,
+        "text_frames": 42,
+        "outline": True,
+    },
+
+    "petrified": {
+        "text": "feedback.petrified",
+        "color": (165, 190, 165),
+        "shake": 2,
+        "shake_frames": 4,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 16,
+        "font_size": 58,
+        "text_frames": 46,
+        "outline": True,
+    },
+
     "slam": {
         "text": "feedback.slam",
         "color": (255, 150, 70),

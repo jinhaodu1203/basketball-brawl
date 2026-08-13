@@ -65,32 +65,140 @@ SHOT_CLOCK_WARNING_FRAMES = 5 * FPS
 SHOT_CLOCK_VIOLATION_NOTICE_FRAMES = 60
 
 
-def reset_round(player1, player2, ball, arena):
-    player1.reset_for_round(arena["player1_spawn_x"])
-    player2.reset_for_round(arena["player2_spawn_x"])
+def reset_round(
+    player1,
+    player2,
+    ball,
+    arena,
+    possession_player=None,
+):
+    """重置下一回合。
 
-    # 新回合重新拥有正常进攻资格。
+    possession_player 为下一回合进攻方。
+
+    规则：
+    - 进攻方站右侧
+    - 防守方站左侧
+    - 进攻方面向左侧篮筐
+    - 防守方面向进攻方
+    - 球直接交给进攻方
+    """
+
+    # ========================================================
+    # 没有指定球权时使用默认开局位置
+    # ========================================================
+    if possession_player is None:
+        player1.reset_for_round(
+            arena["player1_spawn_x"]
+        )
+
+        player2.reset_for_round(
+            arena["player2_spawn_x"]
+        )
+
+    else:
+        # ====================================================
+        # 确定进攻 / 防守方
+        # ====================================================
+        offense = possession_player
+
+        defense = (
+            player2
+            if offense is player1
+            else player1
+        )
+
+        # ====================================================
+        # 先执行角色自己的回合重置
+        # ====================================================
+        offense.reset_for_round(
+            arena["player2_spawn_x"]
+        )
+
+        defense.reset_for_round(
+            arena["player1_spawn_x"]
+        )
+
+        # ====================================================
+        # 进攻方永远站右边
+        # 面向左侧篮筐
+        # ====================================================
+        offense.x = arena["player2_spawn_x"]
+        offense.facing_right = False
+
+        # ====================================================
+        # 防守方站左边
+        # 面向右侧进攻球员
+        # ====================================================
+        defense.x = arena["player1_spawn_x"]
+        defense.facing_right = True
+
+    # ========================================================
+    # 新回合清除 CLEAR 状态
+    # ========================================================
     player1.must_clear_three = False
     player2.must_clear_three = False
 
-    # 清除三分线 clear 提示。
     player1.clear_feedback_state = None
     player2.clear_feedback_state = None
+
     player1.clear_feedback_timer = 0
     player2.clear_feedback_timer = 0
 
+    # ========================================================
+    # 篮球重置
+    # ========================================================
     ball.x = arena["ball_spawn_x"]
     ball.y = arena["ground_y"] - 200
+
     ball.previous_x = ball.x
     ball.previous_y = ball.y
+
     ball.vx = 0
     ball.vy = 0
+
     ball.state = "loose"
     ball.holder = None
+
     ball.last_shooter = None
     ball.shot_distance = 0
+
     ball.rebound_available = False
+
+    if hasattr(ball, "force_make"):
+        ball.force_make = False
+
     ball.clear_pass()
+
+    # ========================================================
+    # 进球后的下一回合：
+    # 球直接给进攻方
+    # ========================================================
+    if possession_player is not None:
+        offense = possession_player
+
+        ball.attach_to(offense)
+
+        # 让篮球立即出现在进攻球员手边。
+        hand_direction = (
+            1
+            if offense.facing_right
+            else -1
+        )
+
+        ball.x = (
+            offense.center()[0]
+            + hand_direction * 20
+        )
+
+        ball.y = (
+            offense.center()[1]
+            - 4
+        )
+
+        ball.previous_x = ball.x
+        ball.previous_y = ball.y
+
 
 
 
@@ -1587,6 +1695,10 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
     score_popup_timer = 0
     score_popup_points = 0
 
+    # 进球换发：
+    # 保存下一回合应该持球的球队。
+    next_possession = None
+
     # ---------- 对局按键 HUD ----------
     # 默认显示；玩家可随时按 H 开关。
     show_controls_hud = True
@@ -1634,6 +1746,7 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                         round_reset_timer = 0
                         score_popup_timer = 0
                         score_popup_points = 0
+                        next_possession = None
 
                         shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
                         shot_clock_team = None
@@ -1652,14 +1765,37 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
             if round_reset_timer > 0:
                 round_reset_timer -= 1
                 if round_reset_timer == 0:
-                    reset_round(player1, player2, ball, arena)
-                    duke_clones = {player1: None, player2: None}
-                    active_bodies = {player1: player1, player2: player2}
-                    players = [player1, player2]
+                    reset_round(
+                        player1,
+                        player2,
+                        ball,
+                        arena,
+                        possession_player=next_possession,
+                    )
 
+                    duke_clones = {
+                        player1: None,
+                        player2: None,
+                    }
+
+                    active_bodies = {
+                        player1: player1,
+                        player2: player2,
+                    }
+
+                    players = [
+                        player1,
+                        player2,
+                    ]
+
+                    # 换发后直接开始新的14秒进攻。
                     shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
-                    shot_clock_team = None
-                    shot_clock_active = False
+                    shot_clock_team = next_possession
+                    shot_clock_active = (
+                        next_possession is not None
+                    )
+
+                    next_possession = None
 
             else:
                 keys = pygame.key.get_pressed()
@@ -1865,6 +2001,17 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     score_popup_points = points
                     score_popup_timer = SCORE_POPUP_DURATION_FRAMES
 
+                    # ========================================
+                    # 进球换边：
+                    # 得分方下一回合防守，
+                    # 被得分方下一回合进攻。
+                    # ========================================
+                    next_possession = (
+                        player2
+                        if scorer is player1
+                        else player1
+                    )
+
                     # V3.6：两分与三分使用不同的视觉反馈。
                     feedback.trigger(
                         "score3" if points == 3 else "score2",
@@ -1882,7 +2029,19 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                             fade_ms=250,
                         )
                     else:
-                        round_reset_timer = ROUND_RESET_DELAY_FRAMES
+                        # ====================================
+                        # 进球换发
+                        # ====================================
+                        # P1进球 -> P2发球
+                        # P2进球 -> P1发球
+                        if scorer is player1:
+                            next_possession = player2
+                        else:
+                            next_possession = player1
+
+                        round_reset_timer = (
+                            ROUND_RESET_DELAY_FRAMES
+                        )
 
         # ==================================================
         # Shot Clock 更新

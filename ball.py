@@ -33,6 +33,11 @@ class Ball:
         self.holder = None
         self.last_shooter = None
         self.shot_distance = 0
+
+        # PERFECT 绿色出手：
+        # 如果没有被盖帽，则忽略篮圈/篮板随机物理偏差，
+        # 保证篮球正常穿过篮圈。
+        self.force_make = False
         self.rebound_available = False
 
         # V3.6 打板上篮。
@@ -82,6 +87,7 @@ class Ball:
 
     def attach_to(self, player):
         self.rebound_available = False
+        self.force_make = False
         self.bank_layup_active = False
         self.rebound_grace_timer = 0
         self.clear_pass()
@@ -123,7 +129,14 @@ class Ball:
 
         return True
 
-    def shoot_towards(self, target_x, target_y, shooter, shot_distance=0):
+    def shoot_towards(
+        self,
+        target_x,
+        target_y,
+        shooter,
+        shot_distance=0,
+        force_make=False,
+    ):
         self.rebound_available = False
         self.bank_layup_active = False
 
@@ -136,6 +149,7 @@ class Ball:
         self.holder = None
         self.last_shooter = shooter
         self.shot_distance = shot_distance
+        self.force_make = bool(force_make)
 
         # ---------- V3.5 投篮统计 ----------
         shooter.fg_attempts = getattr(shooter, "fg_attempts", 0) + 1
@@ -339,8 +353,32 @@ class Ball:
                 self.x = hand_x
                 self.y = hand_y
             else:
-                speed = DRIBBLE_SPEED_MOVING if moving else DRIBBLE_SPEED_IDLE
-                self.dribble_phase = (self.dribble_phase + speed) % 2.0
+                speed = (
+                    DRIBBLE_SPEED_MOVING
+                    if moving
+                    else DRIBBLE_SPEED_IDLE
+                )
+
+                # ----------------------------------------------------
+                # 角色独立运球节奏
+                #
+                # EMA 的动作整体更从容，因此篮球上下弹跳也同步减速。
+                # 只影响持球运球动画，不影响投篮、传球和自由球物理。
+                # ----------------------------------------------------
+                dribble_speed_multiplier = getattr(
+                    holder,
+                    "character_config",
+                    {},
+                ).get(
+                    "dribble_speed_multiplier",
+                    1.0,
+                )
+
+                speed *= dribble_speed_multiplier
+
+                self.dribble_phase = (
+                    self.dribble_phase + speed
+                ) % 2.0
 
                 # 三角波：0 -> 1 -> 0。比正弦波更像篮球快速下落、回弹。
                 bounce = self.dribble_phase if self.dribble_phase <= 1.0 else 2.0 - self.dribble_phase
@@ -349,8 +387,24 @@ class Ball:
                 ground_ball_y = self.arena["ground_y"] - self.radius - DRIBBLE_GROUND_CLEARANCE
                 self.y = hand_y + (ground_ball_y - hand_y) * bounce
 
-                sway = DRIBBLE_MOVING_SWAY * bounce if moving else 0
-                self.x = hand_x + hand_side * sway
+                sway = (
+                    DRIBBLE_MOVING_SWAY * bounce
+                    if moving
+                    else 0
+                )
+
+                # EMA 运球动作更收敛，减少横向甩动。
+                if getattr(
+                    holder,
+                    "character_id",
+                    "",
+                ) == "ema":
+                    sway *= 0.78
+
+                self.x = (
+                    hand_x
+                    + hand_side * sway
+                )
 
             self.vx = 0
             self.vy = 0
@@ -382,7 +436,10 @@ class Ball:
                     return
 
         if self.state == "flying":
-            self._handle_hoop_collisions()
+            # GREEN PERFECT 出手不被篮筐物理随机弹飞。
+            # 盖帽仍然可以在 Player.try_block_ball 中正常发生。
+            if not self.force_make:
+                self._handle_hoop_collisions()
 
         if self.x - self.radius < 0:
             self.x = self.radius
@@ -473,6 +530,7 @@ class Ball:
                 ) + 1
 
         self.state = "loose"
+        self.force_make = False
         self.clear_pass()
         self.vx = 0
         self.vy = 0

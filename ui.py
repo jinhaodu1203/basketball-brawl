@@ -1,6 +1,7 @@
 """菜单、HUD、暂停与结算界面。"""
 
 import os
+import math
 import sys
 import webbrowser
 from urllib.parse import quote
@@ -248,6 +249,37 @@ def _showcase_routine(character_id):
             # Hold the just-summoned Blood Echo on screen a little longer.
             ("idle",     2, 0.1200, 0, "clone_hold"),
             ("run",      2, 0.0778, 40, "clone_run"),
+        ],
+
+        # ACE：跑入 -> Deadeye / Shot -> 继续跑动。
+        "ace": [
+            # 跑入场。
+            ("run", 2, 0.0720, 34, None),
+
+            # 举弓并逐渐拉满。
+            ("deadeye", 1, 0.0750, 0, "deadeye"),
+
+            # 拉满后真正保持瞄准。
+            ("aim", 4, 0.1800, 0, "deadeye_hold"),
+
+            # 技能展示结束后继续跑。
+            ("run", 2, 0.0720, 40, None),
+        ],
+        "ema": [
+            # 正常速度入场
+            ("walk", 2, 0.0720, 34, None),
+
+            # 短暂停留
+            ("idle", 1, 0.0800, 0, None),
+
+            # 正常速度释放石化凝视
+            ("special", 2, 0.0750, 0, "petrify"),
+
+            # 技能结束停顿
+            ("idle", 1, 0.0800, 0, "petrify_after"),
+
+            # 正常速度离场
+            ("walk", 2, 0.0720, 40, None),
         ],
     }
     return routines.get(character_id, [("run", 3, 0.0778, 36, None)])
@@ -766,6 +798,357 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
         # First half = initial jump; second half = vertical velocity resets
         # upward, creating the second boost.
         # --------------------------------------------------------------
+        elif skill_type in ("petrify", "petrify_after"):
+            # ==========================================================
+            # EMA_SHOWCASE_PETRIFY
+            # 仅主页角色展示使用。
+            # ==========================================================
+
+            fx = pygame.Surface(
+                (500, 340),
+                pygame.SRCALPHA,
+            )
+
+            cx = 145
+            cy = 165
+
+            tick = (
+                pygame.time.get_ticks()
+                * 0.018
+            )
+
+            if skill_type == "petrify":
+                power = max(
+                    0.15,
+                    min(
+                        1.0,
+                        action_progress * 2.4,
+                    ),
+                )
+            else:
+                power = 0.42
+
+            pulse = (
+                0.85
+                + math.sin(tick * 4.0)
+                * 0.15
+            )
+
+            # ----------------------------------------------------------
+            # 1. EMA 身后的美杜莎幽绿色能量环
+            # ----------------------------------------------------------
+
+            for radius, alpha, width in (
+                (50, 150, 4),
+                (72, 95, 3),
+                (96, 48, 2),
+            ):
+                pygame.draw.circle(
+                    fx,
+                    (
+                        85,
+                        255,
+                        145,
+                        int(alpha * power),
+                    ),
+                    (
+                        cx,
+                        cy,
+                    ),
+                    int(
+                        radius
+                        * pulse
+                    ),
+                    width,
+                )
+
+            # ----------------------------------------------------------
+            # 2. 两只眼睛的绿色核心
+            # ----------------------------------------------------------
+
+            eye_y = cy - 35
+
+            for eye_offset in (-7, 7):
+                pygame.draw.circle(
+                    fx,
+                    (
+                        215,
+                        255,
+                        220,
+                        int(235 * power),
+                    ),
+                    (
+                        cx + eye_offset,
+                        eye_y,
+                    ),
+                    4,
+                )
+
+                pygame.draw.circle(
+                    fx,
+                    (
+                        65,
+                        255,
+                        115,
+                        int(130 * power),
+                    ),
+                    (
+                        cx + eye_offset,
+                        eye_y,
+                    ),
+                    10,
+                    2,
+                )
+
+            # ----------------------------------------------------------
+            # 3. 石化凝视锥形光束
+            # ----------------------------------------------------------
+
+            beam_start_x = cx + 15
+            beam_end_x = 470
+
+            beam_half_height = int(
+                64 * power
+            )
+
+            pygame.draw.polygon(
+                fx,
+                (
+                    75,
+                    255,
+                    125,
+                    int(36 * power),
+                ),
+                (
+                    (
+                        beam_start_x,
+                        eye_y,
+                    ),
+                    (
+                        beam_end_x,
+                        eye_y - beam_half_height,
+                    ),
+                    (
+                        beam_end_x,
+                        eye_y + beam_half_height,
+                    ),
+                ),
+            )
+
+            # 上边缘
+            pygame.draw.line(
+                fx,
+                (
+                    125,
+                    255,
+                    165,
+                    int(145 * power),
+                ),
+                (
+                    beam_start_x,
+                    eye_y,
+                ),
+                (
+                    beam_end_x,
+                    eye_y - beam_half_height,
+                ),
+                2,
+            )
+
+            # 下边缘
+            pygame.draw.line(
+                fx,
+                (
+                    125,
+                    255,
+                    165,
+                    int(145 * power),
+                ),
+                (
+                    beam_start_x,
+                    eye_y,
+                ),
+                (
+                    beam_end_x,
+                    eye_y + beam_half_height,
+                ),
+                2,
+            )
+
+            # ----------------------------------------------------------
+            # 4. 光束内部蛇形能量
+            # ----------------------------------------------------------
+
+            for i in range(4):
+                points = []
+
+                for j in range(10):
+                    x = (
+                        beam_start_x
+                        + j * 30
+                    )
+
+                    y = int(
+                        eye_y
+                        + math.sin(
+                            tick * 3
+                            + i * 1.7
+                            + j * 0.8
+                        )
+                        * (
+                            10
+                            + i * 4
+                        )
+                    )
+
+                    points.append(
+                        (
+                            x,
+                            y,
+                        )
+                    )
+
+                if len(points) >= 2:
+                    pygame.draw.lines(
+                        fx,
+                        (
+                            100,
+                            245,
+                            140,
+                            int(
+                                max(
+                                    25,
+                                    105 * power,
+                                )
+                            ),
+                        ),
+                        False,
+                        points,
+                        2,
+                    )
+
+            # ----------------------------------------------------------
+            # 5. 光束末端石化碎片
+            # ----------------------------------------------------------
+
+            stone_x = 440
+            stone_y = eye_y
+
+            for i in range(14):
+                angle = (
+                    i
+                    * math.tau
+                    / 14
+                    + tick * 0.25
+                )
+
+                distance = (
+                    18
+                    + (i % 4) * 9
+                )
+
+                px = int(
+                    stone_x
+                    + math.cos(angle)
+                    * distance
+                )
+
+                py = int(
+                    stone_y
+                    + math.sin(angle)
+                    * distance
+                )
+
+                size = (
+                    2
+                    + i % 3
+                )
+
+                pygame.draw.rect(
+                    fx,
+                    (
+                        170,
+                        190,
+                        170,
+                        int(195 * power),
+                    ),
+                    (
+                        px,
+                        py,
+                        size,
+                        size,
+                    ),
+                )
+
+            # ----------------------------------------------------------
+            # 6. 石像裂纹核心
+            # ----------------------------------------------------------
+
+            pygame.draw.circle(
+                fx,
+                (
+                    145,
+                    165,
+                    145,
+                    int(95 * power),
+                ),
+                (
+                    stone_x,
+                    stone_y,
+                ),
+                int(
+                    22 + 8 * power
+                ),
+                3,
+            )
+
+            crack_points = (
+                (
+                    (stone_x - 11, stone_y - 18),
+                    (stone_x - 2, stone_y - 4),
+                ),
+                (
+                    (stone_x - 2, stone_y - 4),
+                    (stone_x - 10, stone_y + 11),
+                ),
+                (
+                    (stone_x + 9, stone_y - 16),
+                    (stone_x + 1, stone_y - 3),
+                ),
+                (
+                    (stone_x + 1, stone_y - 3),
+                    (stone_x + 12, stone_y + 10),
+                ),
+            )
+
+            for p1, p2 in crack_points:
+                pygame.draw.line(
+                    fx,
+                    (
+                        225,
+                        235,
+                        220,
+                        int(180 * power),
+                    ),
+                    p1,
+                    p2,
+                    2,
+                )
+
+            # ----------------------------------------------------------
+            # 整个效果跟随 EMA
+            # ----------------------------------------------------------
+
+            screen.blit(
+                fx,
+                fx.get_rect(
+                    center=(
+                        actor_x + 145,
+                        actor_y - 120,
+                    )
+                ),
+            )
+
         elif skill_type == "double_jump":
             actor_x = 272
 
@@ -823,6 +1206,120 @@ def _draw_character_carousel(screen, font, small_font, elapsed):
                     )
 
 
+
+        # --------------------------------------------------------------
+        # ACE: Deadeye
+        # 金色瞄准圈 + 投射强化效果。
+        # --------------------------------------------------------------
+        if (
+            skill_type in ("deadeye", "deadeye_hold")
+            and character_id == "ace"
+        ):
+            actor_x = 272
+
+            deadeye_fx = pygame.Surface(
+                (310, 280),
+                pygame.SRCALPHA,
+            )
+
+            fx_cx = 155
+            fx_cy = 155
+
+            pulse = (
+                0.72
+                + 0.28
+                * math.sin(
+                    action_progress
+                    * math.pi
+                    * 4
+                )
+            )
+
+            # 外层瞄准圈。
+            for radius, alpha in (
+                (92, 65),
+                (72, 105),
+                (52, 170),
+            ):
+                pygame.draw.circle(
+                    deadeye_fx,
+                    (
+                        255,
+                        210,
+                        72,
+                        int(alpha * pulse),
+                    ),
+                    (fx_cx, fx_cy),
+                    radius,
+                    2,
+                )
+
+            # 十字准星。
+            cross_alpha = int(
+                210 * pulse
+            )
+
+            pygame.draw.line(
+                deadeye_fx,
+                (
+                    255,
+                    235,
+                    140,
+                    cross_alpha,
+                ),
+                (fx_cx - 112, fx_cy),
+                (fx_cx - 48, fx_cy),
+                3,
+            )
+
+            pygame.draw.line(
+                deadeye_fx,
+                (
+                    255,
+                    235,
+                    140,
+                    cross_alpha,
+                ),
+                (fx_cx + 48, fx_cy),
+                (fx_cx + 112, fx_cy),
+                3,
+            )
+
+            pygame.draw.line(
+                deadeye_fx,
+                (
+                    255,
+                    235,
+                    140,
+                    cross_alpha,
+                ),
+                (fx_cx, fx_cy - 112),
+                (fx_cx, fx_cy - 48),
+                3,
+            )
+
+            pygame.draw.line(
+                deadeye_fx,
+                (
+                    255,
+                    235,
+                    140,
+                    cross_alpha,
+                ),
+                (fx_cx, fx_cy + 48),
+                (fx_cx, fx_cy + 112),
+                3,
+            )
+
+            screen.blit(
+                deadeye_fx,
+                deadeye_fx.get_rect(
+                    center=(
+                        actor_x,
+                        actor_y - 100,
+                    )
+                ),
+            )
 
         actor_rect = frame.get_rect(midbottom=(actor_x, actor_y))
 
@@ -1013,6 +1510,79 @@ def _load_ui_image(relative_path, size=None):
         return normalized
     except (pygame.error, OSError, ValueError):
         return None
+
+def _load_character_select_art(
+    character_id,
+    target_height,
+    max_width,
+):
+    """角色选择界面人物图。
+
+    优先使用 portrait.png。
+    如果没有 portrait，则自动使用 idle 动画第一帧。
+    """
+
+    portrait = _load_ui_image(
+        f"characters/{character_id}/portrait.png"
+    )
+
+    if portrait is not None:
+        width = portrait.get_width()
+        height = portrait.get_height()
+
+        if width > 0 and height > 0:
+            scale = min(
+                target_height / height,
+                max_width / width,
+            )
+
+            width = max(
+                1,
+                int(width * scale),
+            )
+
+            height = max(
+                1,
+                int(height * scale),
+            )
+
+            return pygame.transform.scale(
+                portrait,
+                (width, height),
+            ).convert_alpha()
+
+    # 没有 portrait.png：
+    # 自动使用角色 idle 第一帧。
+    frames = _showcase_frames(
+        character_id,
+        "idle",
+        target_height,
+    )
+
+    if not frames:
+        return None
+
+    art = frames[0].copy()
+
+    if art.get_width() > max_width:
+        scale = max_width / art.get_width()
+
+        art = pygame.transform.scale(
+            art,
+            (
+                max_width,
+                max(
+                    1,
+                    int(
+                        art.get_height()
+                        * scale
+                    ),
+                ),
+            ),
+        ).convert_alpha()
+
+    return art
+
 
 def _draw_backdrop(screen, accent=(255, 116, 54)):
     key = tuple(accent)
@@ -2099,6 +2669,10 @@ def select_character(screen, font, small_font, title_font, player_label):
                     return CHARACTER_ORDER[2]
                 elif event.key in (pygame.K_4, pygame.K_KP4) and len(CHARACTER_ORDER) >= 4:
                     return CHARACTER_ORDER[3]
+                elif event.key in (pygame.K_5, pygame.K_KP5) and len(CHARACTER_ORDER) >= 5:
+                    return CHARACTER_ORDER[4]
+                elif event.key in (pygame.K_6, pygame.K_KP6) and len(CHARACTER_ORDER) >= 6:
+                    return CHARACTER_ORDER[5]
 
         _draw_backdrop(screen, (146, 83, 255))
         _draw_back_button(screen, font)
@@ -2111,9 +2685,9 @@ def select_character(screen, font, small_font, title_font, player_label):
         screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 54)))
 
         hint_text = (
-            "A / D  •  ← / →  •  鼠标滚轮切换  •  ENTER 确认"
+            "A / D  •  ← / →  •  滚轮切换  •  1-6 快选  •  ENTER 确认"
             if get_language() == "zh"
-            else "A / D  •  ← / →  •  Mouse wheel to switch  •  ENTER to confirm"
+            else "A / D  •  ← / →  •  Wheel  •  1-6 quick select  •  ENTER confirm"
         )
         hint = small_font.render(hint_text, True, (180, 194, 219))
         screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 90)))
@@ -2153,9 +2727,10 @@ def select_character(screen, font, small_font, title_font, player_label):
                 radius=18,
             )
 
-            preview = _load_ui_image(
-                f"characters/{cid}/portrait.png",
-                (155, 215),
+            preview = _load_character_select_art(
+                cid,
+                target_height=215,
+                max_width=155,
             )
             if preview:
                 screen.blit(
@@ -2198,9 +2773,10 @@ def select_character(screen, font, small_font, title_font, player_label):
         # Left half: large portrait, shown cleanly without a glow circle.
         art_rect = pygame.Rect(center_card.x + 18, center_card.y + 18, 205, center_card.height - 36)
 
-        portrait = _load_ui_image(
-            f"characters/{current_id}/portrait.png",
-            (190, 270),
+        portrait = _load_character_select_art(
+            current_id,
+            target_height=270,
+            max_width=190,
         )
         if portrait:
             screen.blit(
@@ -2248,31 +2824,60 @@ def select_character(screen, font, small_font, title_font, player_label):
             screen.blit(surface, (info_x, y))
             y += font.get_linesize()
 
-        desc_y = max(y + 12, center_card.y + 186)
-        desc_label = (
-            "角色介绍" if get_language() == "zh" else "PROFILE"
+        # PROFILE 与普通角色保持统一布局。
+        desc_y = max(
+            y + 12,
+            center_card.y + 186,
         )
+
+        # ---------- PROFILE ----------
+        desc_label = (
+            "角色介绍"
+            if get_language() == "zh"
+            else "PROFILE"
+        )
+
         desc_label_surface = small_font.render(
             desc_label,
             True,
             (135, 153, 185),
         )
-        screen.blit(desc_label_surface, (info_x, desc_y))
 
-        desc_y += 24
+        screen.blit(
+            desc_label_surface,
+            (info_x, desc_y),
+        )
+
+        desc_y += 25
+
         description_lines = _wrap_text(
             small_font,
-            tr(f"characters.{current_id}.description"),
+            tr(
+                f"characters.{current_id}.description"
+            ),
             info_width,
         )
-        for line in description_lines[:4]:
-            surface = small_font.render(line, True, (218, 225, 239))
-            screen.blit(surface, (info_x, desc_y))
+
+        # 最多只显示两行。
+        # 属性条从下方固定区域开始，所以不会再发生重叠。
+        for line in description_lines[:2]:
+            surface = small_font.render(
+                line,
+                True,
+                (218, 225, 239),
+            )
+
+            screen.blit(
+                surface,
+                (info_x, desc_y),
+            )
+
             desc_y += small_font.get_linesize()
 
         # Rating bars.
         ratings = current.get("ratings", {})
-        rating_y = center_card.bottom - 104
+        # 属性区固定在卡片底部，和角色介绍保持足够间距。
+        rating_y = center_card.bottom - 96
         rating_specs = [
             ("SPD", ratings.get("speed", 3)),
             ("3PT", ratings.get("three", 3)),
