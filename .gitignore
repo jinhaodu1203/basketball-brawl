@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .idea/
 .DS_Store
+# Development backups
+*_before_*.py
+*_before_*.json
+*_before_*.png
+*_broken_*.py
+*_working.py
+*_backup.py
+*.bak
+*.tmp
