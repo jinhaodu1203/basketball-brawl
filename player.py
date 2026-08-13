@@ -26,6 +26,7 @@ from constants import (
     BOX_OUT_RANGE, BOX_OUT_PRIORITY_BONUS,
     DUNK_TRIGGER_DISTANCE, DUNK_TRIGGER_VERTICAL, DUNK_MIN_UPWARD_SPEED,
     DUNK_COOLDOWN_FRAMES, DUNK_POINTS,
+    LAYUP_TRIGGER_DISTANCE, LAYUP_HORIZONTAL_ERROR,
     PASS_INTERCEPT_RADIUS, PASS_RECEIVE_IMMUNITY_FRAMES,
 )
 from animation import load_character_animations, draw_procedural_character
@@ -225,6 +226,12 @@ class Player:
             return
 
         if action_pressed:
+            # V3.6：篮下近距离直接进入上篮，
+            # 不需要像中远投一样长按蓄力。
+            if self._can_layup(ball):
+                self._perform_layup(ball)
+                return
+
             self.is_charging_shot = True
             self.shot_charge = min(
                 float(self.shot_charge_max),
@@ -237,6 +244,115 @@ class Player:
 
         if self.is_charging_shot:
             self._release_charged_shot(ball)
+
+    def _can_layup(self, ball):
+        """在篮筐前约两步的位置开始上篮。"""
+        if ball.state != "held" or ball.holder is not self:
+            return False
+
+        if getattr(self, "must_clear_three", False):
+            return False
+
+        rim_x = self.arena["rim_x"]
+        player_x, player_y = self.center()
+
+        # 本游戏进攻篮筐在左侧。
+        # 正常突破时球员从右侧向篮筐接近。
+        horizontal_distance = player_x - rim_x
+
+        # 约“两步起跳区”：
+        # 太远不触发，已经冲到篮筐下面也不再强制上篮。
+        layup_min_distance = 70
+        layup_max_distance = 155
+
+        if not (
+            layup_min_distance
+            <= horizontal_distance
+            <= layup_max_distance
+        ):
+            return False
+
+        # 避免人物高度位置异常时触发。
+        rim_y = self.arena["rim_y"]
+        if abs(player_y - rim_y) > 150:
+            return False
+
+        return True
+
+
+    def _perform_layup(self, ball):
+        """篮下近距离终结：比普通跳投更快、更准。"""
+        if not self._can_layup(ball):
+            return False
+
+        rim_x = self.arena["rim_x"]
+        rim_y = self.arena["rim_y"]
+
+        shooter_x, shooter_y = self.center()
+
+        # 上篮存在很小误差，但比普通跳投稳定得多。
+        target_x = rim_x + random.uniform(
+            -LAYUP_HORIZONTAL_ERROR,
+            LAYUP_HORIZONTAL_ERROR,
+        )
+
+        target_y = rim_y - 3
+
+        shot_distance = (
+            (shooter_x - rim_x) ** 2
+            + (shooter_y - rim_y) ** 2
+        ) ** 0.5
+
+        # 上篮起步：
+        # 收掉一部分冲刺惯性，避免高速直接冲过篮筐撞到篮板。
+        self.vx *= 0.42
+
+        if self.on_ground:
+            self.vy = self.jump_velocity * 0.62
+            self.on_ground = False
+
+        self.is_charging_shot = False
+        self.shot_charge = 0.0
+
+        self.play_action_animation(
+            "attack_2",
+            18,
+        )
+
+        self.events.append(
+            (
+                "layup",
+                shooter_x,
+                shooter_y - 35,
+            )
+        )
+
+        # 高速突破或从两步区外沿起步时优先打板。
+        horizontal_distance = abs(
+            shooter_x - rim_x
+        )
+
+        use_bank = (
+            abs(self.vx) >= self.move_speed * 0.45
+            or horizontal_distance >= 110
+        )
+
+        if use_bank:
+            ball.shoot_bank_layup(
+                self,
+                shot_distance,
+            )
+        else:
+            # 慢速篮下使用柔和挑篮。
+            ball.shoot_towards(
+                target_x,
+                target_y,
+                self,
+                shot_distance,
+            )
+
+        return True
+
 
     def _release_charged_shot(self, ball):
         if ball.state != "held" or ball.holder is not self:
@@ -519,6 +635,11 @@ class Player:
         """AI 立即投篮；成功时返回 True。"""
         if ball.state != "held" or ball.holder is not self:
             return False
+
+        # V3.6：AI 进入篮下以后优先上篮，
+        # 如果当前已经满足扣篮物理条件，try_dunk 会在主循环先处理。
+        if self._can_layup(ball):
+            return self._perform_layup(ball)
 
         hoop_center_x = self.arena["rim_x"]
         hoop_center_y = self.arena["rim_y"]

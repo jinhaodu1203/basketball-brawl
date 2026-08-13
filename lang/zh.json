@@ -149,7 +149,10 @@
     "shot_perfect": "完美出手！",
     "shot_good": "不错",
     "shot_early": "出手过早",
-    "shot_late": "出手过晚"
+    "shot_late": "出手过晚",
+    "score2": "两分命中！",
+    "score3": "三分命中！",
+    "layup": "上篮！"
   },
   "characters": {
     "djh": {

@@ -35,6 +35,9 @@ class Ball:
         self.shot_distance = 0
         self.rebound_available = False
 
+        # V3.6 打板上篮。
+        self.bank_layup_active = False
+
         # 记录当前投篮的碰框次数。
         self.rim_contact_count = 0
         self.rim_sound_cooldown = 0
@@ -79,6 +82,7 @@ class Ball:
 
     def attach_to(self, player):
         self.rebound_available = False
+        self.bank_layup_active = False
         self.rebound_grace_timer = 0
         self.clear_pass()
         self.state = "held"
@@ -121,6 +125,7 @@ class Ball:
 
     def shoot_towards(self, target_x, target_y, shooter, shot_distance=0):
         self.rebound_available = False
+        self.bank_layup_active = False
 
         # 新投篮重新计算碰框次数。
         self.rim_contact_count = 0
@@ -157,6 +162,58 @@ class Ball:
         self.events.append(
             ("shot", self.x, self.y)
         )
+
+    def shoot_bank_layup(self, shooter, shot_distance=0):
+        """让上篮球先命中篮板，再反弹向篮筐。"""
+        self.rebound_available = False
+        self.bank_layup_active = True
+
+        self.rim_contact_count = 0
+        self.rim_sound_cooldown = 0
+        self.rebound_grace_timer = 0
+        self.clear_pass()
+
+        self.state = "flying"
+        self.holder = None
+        self.last_shooter = shooter
+        self.shot_distance = shot_distance
+
+        shooter.fg_attempts = getattr(
+            shooter,
+            "fg_attempts",
+            0,
+        ) + 1
+
+        self.shot_score_allowed = not getattr(
+            shooter,
+            "must_clear_three",
+            False,
+        )
+
+        rim_x = self.arena["rim_x"]
+        rim_y = self.arena["rim_y"]
+        backboard_x = self.arena.get(
+            "backboard_x",
+            rim_x - 48,
+        )
+
+        # 第一阶段：瞄准篮板上方甜点区。
+        target_x = backboard_x + self.radius + 2
+        target_y = rim_y - 24
+
+        frames = 17
+
+        self.vx = (target_x - self.x) / frames
+        self.vy = (
+            target_y
+            - self.y
+            - 0.5 * GRAVITY * frames ** 2
+        ) / frames
+
+        self.events.append(
+            ("shot", self.x, self.y)
+        )
+
 
     def _resolve_circle_collision(self, collider_x, collider_y, collider_radius):
         """让篮球与圆形篮筐边缘发生反弹。"""
@@ -206,7 +263,16 @@ class Ball:
         )
         if touching_board_height and crossed_board and self.vx < 0:
             self.x = backboard_x + BACKBOARD_THICKNESS / 2 + self.radius
-            self.vx = abs(self.vx) * BACKBOARD_BOUNCE_DAMPING
+
+            if self.bank_layup_active:
+                # 打板后把球柔和送向篮筐。
+                # 让球在约 12 帧后回到篮圈高度附近。
+                self.vx = 2.8
+                self.vy = -3.2
+                self.bank_layup_active = False
+            else:
+                self.vx = abs(self.vx) * BACKBOARD_BOUNCE_DAMPING
+
             self.rebound_available = True
 
             # 约 0.4 秒内 AI 不允许抢篮板。

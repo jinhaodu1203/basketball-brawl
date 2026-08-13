@@ -66,6 +66,33 @@ EVENT_STYLE = {
         "particle_count": 0,
     },
     # 只保留“角色技能”和“进球”反馈。所有震屏都控制在轻微范围内。
+    # ---------- V3.6 得分类型反馈 ----------
+    "score2": {
+        "text": "feedback.score2",
+        "color": (255, 215, 90),
+        "shake": 3,
+        "shake_frames": 5,
+        "freeze": 1,
+        "flash": None,
+        "particle_count": 8,
+        "font_size": 54,
+        "text_frames": 48,
+        "outline": True,
+    },
+
+    "score3": {
+        "text": "feedback.score3",
+        "color": (105, 220, 255),
+        "shake": 7,
+        "shake_frames": 10,
+        "freeze": 4,
+        "flash": None,
+        "particle_count": 18,
+        "font_size": 70,
+        "text_frames": 100,
+        "outline": True,
+    },
+
     "score": {
         "text": "feedback.score",
         "color": (255, 215, 70),
@@ -104,6 +131,19 @@ EVENT_STYLE = {
         "flash": (150, 225, 255),
         "particle_count": 12,
     },
+    "layup": {
+        "text": "feedback.layup",
+        "color": (255, 235, 155),
+        "shake": 0,
+        "shake_frames": 0,
+        "freeze": 0,
+        "flash": None,
+        "particle_count": 5,
+        "font_size": 42,
+        "text_frames": 38,
+        "outline": False,
+    },
+
     "dunk": {
         "text": "feedback.dunk",
         "color": (255, 195, 45),

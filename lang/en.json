@@ -149,7 +149,10 @@
     "shot_perfect": "PERFECT!",
     "shot_good": "GOOD",
     "shot_early": "EARLY",
-    "shot_late": "LATE"
+    "shot_late": "LATE",
+    "score2": "2 POINTS!",
+    "score3": "3 POINTER!",
+    "layup": "LAYUP!"
   },
   "characters": {
     "djh": {

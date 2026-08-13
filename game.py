@@ -1591,6 +1591,9 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
     # 默认显示；玩家可随时按 H 开关。
     show_controls_hud = True
 
+    # V3.6：开局操作 HUD 显示 5 秒，最后 1 秒淡出。
+    controls_hud_timer = 5 * FPS
+
     # ---------- Shot Clock ----------
     # 第一次有人真正获得球权后才开始倒计时。
     shot_clock_frames = SHOT_CLOCK_FULL_FRAMES
@@ -1607,6 +1610,10 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_h and not game_over:
                     show_controls_hud = not show_controls_hud
+
+                    # 手动重新打开时再次完整显示 5 秒。
+                    if show_controls_hud:
+                        controls_hud_timer = 5 * FPS
 
                 elif event.key == pygame.K_ESCAPE and not game_over:
                     result = pause_menu(screen, font, title_font)
@@ -1857,6 +1864,13 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
                     scorer.score += points
                     score_popup_points = points
                     score_popup_timer = SCORE_POPUP_DURATION_FRAMES
+
+                    # V3.6：两分与三分使用不同的视觉反馈。
+                    feedback.trigger(
+                        "score3" if points == 3 else "score2",
+                        arena["rim_x"],
+                        arena["rim_y"],
+                    )
                     if scorer.score >= WINNING_SCORE:
                         game_over = True
                         winner = scorer
@@ -1943,6 +1957,17 @@ def play_session(screen, font, small_font, title_font, assets_dir, show_fps=Fals
 
         if shot_clock_violation_timer > 0:
             shot_clock_violation_timer -= 1
+
+        # ---------- V3.6 操作 HUD 自动淡出 ----------
+        if (
+            show_controls_hud
+            and controls_hud_timer > 0
+            and not game_over
+        ):
+            controls_hud_timer -= 1
+
+            if controls_hud_timer <= 0:
+                show_controls_hud = False
 
         for player in players:
             for event_type, event_x, event_y in player.consume_events():
