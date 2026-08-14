@@ -1,0 +1,39 @@
+# Windows VERSIONINFO resource for HOOP HAVOC.
+# Consumed by PyInstaller via the `version=` argument in "HOOP HAVOC.spec".
+# Shows up in the executable's right-click -> Properties -> Details tab.
+#
+# Keep filevers/prodvers in sync with the game version when cutting a release.
+
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=(3, 8, 0, 0),
+        prodvers=(3, 8, 0, 0),
+        mask=0x3F,
+        flags=0x0,
+        OS=0x40004,
+        fileType=0x1,
+        subtype=0x0,
+        date=(0, 0),
+    ),
+    kids=[
+        StringFileInfo([
+            StringTable(
+                '040904B0',
+                [
+                    StringStruct('CompanyName', 'Jinhao Du'),
+                    StringStruct('FileDescription', 'HOOP HAVOC'),
+                    StringStruct('FileVersion', '3.8.0.0'),
+                    StringStruct('InternalName', 'HOOP HAVOC'),
+                    StringStruct(
+                        'LegalCopyright',
+                        'Copyright (c) 2026 Jinhao Du. All rights reserved.',
+                    ),
+                    StringStruct('OriginalFilename', 'HOOP HAVOC.exe'),
+                    StringStruct('ProductName', 'HOOP HAVOC'),
+                    StringStruct('ProductVersion', '3.8.0.0'),
+                ],
+            )
+        ]),
+        VarFileInfo([VarStruct('Translation', [1033, 1200])]),
+    ],
+)

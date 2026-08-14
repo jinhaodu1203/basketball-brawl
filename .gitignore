@@ -11,3 +11,11 @@ __pycache__/
 *_backup.py
 *.bak
 *.tmp
+# Local agent rules and hand-off notes
+CLAUDE.md
+WINDOWS_PORT_NOTES.md
+# Windows build environment
+.venv/
+# Windows build output (kept separate from the committed macOS build/ and dist/)
+build-windows/
+dist-windows/
