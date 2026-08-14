@@ -11,3 +11,4 @@ __pycache__/
 *_backup.py
 *.bak
 *.tmp
+*WINDOW_DISPLAY_NOTES.md
