@@ -8,6 +8,7 @@ from urllib.parse import quote
 import pygame
 
 from audio import get_audio
+from display import set_fullscreen
 
 from constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
@@ -2819,6 +2820,12 @@ def settings_menu(screen, font, small_font, title_font, settings):
                     font, small_font, title_font = create_fonts(settings.language)
                 elif item == "fullscreen":
                     settings.fullscreen = not settings.fullscreen
+                    # Apply it right away so the player sees the mode change
+                    # when they flip the switch, not after leaving this page.
+                    # In-place only: a switch that needed the display rebuilt
+                    # would invalidate the surface this loop draws into, so
+                    # that case is left to main() once we return.
+                    set_fullscreen(settings.fullscreen, allow_rebuild=False)
                 elif item in (
                     "master_volume",
                     "music_volume",
