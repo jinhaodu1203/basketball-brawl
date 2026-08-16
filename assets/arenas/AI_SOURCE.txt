@@ -1,0 +1,21 @@
+﻿Asset Type: Arena Background Artwork
+Game: HOOP HAVOC
+
+Files:
+- assets/arenas/street/background.png
+- assets/arenas/gym/background.png
+- assets/arenas/rooftop/background.png
+
+Source: Generative AI
+Usage: Original game artwork generated for HOOP HAVOC
+Commercial Use: Intended for commercial use in HOOP HAVOC
+
+Steam Disclosure:
+These images are Pre-Generated AI Content and should be disclosed in the
+Steamworks Content Survey under Generative Artificial Intelligence Content.
+
+Description for Steam:
+Pre-generated AI tools were used during development to create selected
+2D arena background artwork. The resulting images were reviewed and
+integrated into the game by the developer. No AI content is generated
+while the game is running.
