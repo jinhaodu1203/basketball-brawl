@@ -43,5 +43,6 @@ HOOP HAVOC.spec
 *_backup.py
 *.bak
 *.tmp
+*WINDOW_DISPLAY_NOTES.md
 *.log
 windows_autostash_backup.patch

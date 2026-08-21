@@ -8,7 +8,8 @@ import pygame
 
 from audio import init_audio, get_audio
 
-from constants import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
+from constants import FPS
+from display import create_screen, prepare_display, set_fullscreen
 from game import play_session
 from settings import load_settings, save_settings
 from localization import create_fonts, set_language
@@ -179,6 +180,10 @@ def apply_audio_settings(settings) -> None:
 
 
 def main():
+    # SDL reads its scaling and DPI hints while the video subsystem starts up,
+    # so this has to happen before pygame.init().
+    prepare_display()
+
     pygame.init()
     try:
         pygame.mixer.init()
@@ -188,7 +193,6 @@ def main():
 
     settings = load_settings()
     screen = create_screen(settings.fullscreen)
-    pygame.display.set_caption("HOOP HAVOC")
 
     set_language(settings.language)
     font, small_font, title_font = create_fonts(settings.language)
@@ -246,8 +250,10 @@ def main():
             save_settings(settings)
             apply_audio_settings(settings)
             if settings.fullscreen != old_fullscreen:
-                screen = create_screen(settings.fullscreen)
-                pygame.display.set_caption("HOOP HAVOC")
+                # settings_menu already switched in place; this reapplies it for
+                # the case where that needed a display rebuild.  Keep the old
+                # surface if nothing was handed back.
+                screen = set_fullscreen(settings.fullscreen) or screen
             if result == "quit":
                 running = False
         elif action == "credits":
