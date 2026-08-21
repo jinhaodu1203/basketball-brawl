@@ -1,8 +1,40 @@
+﻿# Python
 __pycache__/
-*.pyc
+*.py[cod]
+
+# IDE / OS
 .idea/
+.vscode/
 .DS_Store
-# Development backups
+Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+winenv/
+buildenv/
+
+# PyInstaller / generated builds
+build/
+build_win/
+dist/
+dist_win/
+_internal/
+RELEASE_WINDOWS/
+
+# Portable/release output folders
+HOOP HAVOC/
+HOOP HAVOC.app/
+basketball-brawl-main/
+
+# Generated executables / archives
+*.exe
+*.zip
+
+# Old macOS build spec (Windows spec remains allowed)
+HOOP HAVOC.spec
+
+# Temporary / backup files
 *_before_*.py
 *_before_*.json
 *_before_*.png
@@ -12,3 +44,5 @@ __pycache__/
 *.bak
 *.tmp
 *WINDOW_DISPLAY_NOTES.md
+*.log
+windows_autostash_backup.patch

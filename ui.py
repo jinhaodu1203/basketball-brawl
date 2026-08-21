@@ -1768,653 +1768,249 @@ def _wrap_text(font, text, max_width):
     return wrapped
 
 
+def _info_page(screen, title_font, small_font, title, sections, footer=None):
+    """绘制可复用的信息页；固定 2×2 信息网格并自动换行。"""
+    _draw_backdrop(screen, (62, 151, 255))
 
-def _tracked_text_width(font, text, tracking=1):
-    text = str(text)
-    if not text:
-        return 0
-    widths = [font.size(ch)[0] for ch in text]
-    return sum(widths) + max(0, len(text) - 1) * tracking
+    title_surface = title_font.render(title, True, COLOR_TEXT)
+    screen.blit(title_surface, title_surface.get_rect(center=(SCREEN_WIDTH // 2, 62)))
 
+    panel = pygame.Rect(78, 104, SCREEN_WIDTH - 156, SCREEN_HEIGHT - 164)
+    _draw_panel(screen, panel, accent=(62, 151, 255), alpha=232)
 
-def _render_tracked_text(font, text, color, tracking=1):
-    """Render text with explicit character spacing."""
-    text = str(text)
+    columns = 2 if len(sections) > 2 else 1
+    rows = max(1, (len(sections) + columns - 1) // columns)
+    column_width = panel.width // columns
+    row_height = panel.height // rows
+    inner_margin_x = 30
+    inner_margin_y = 24
+    max_text_width = column_width - inner_margin_x * 2
+    line_height = max(18, small_font.get_linesize() - 3)
 
-    if not text:
-        return pygame.Surface(
-            (1, max(1, font.get_linesize())),
-            pygame.SRCALPHA,
+    # 中间分隔线让四块内容更清晰，同时不改变现有 UI 风格。
+    if columns == 2:
+        divider_x = panel.centerx
+        pygame.draw.line(
+            screen,
+            (62, 151, 255, 70),
+            (divider_x, panel.y + 18),
+            (divider_x, panel.bottom - 18),
+            1,
+        )
+    if rows == 2:
+        divider_y = panel.y + row_height
+        pygame.draw.line(
+            screen,
+            (62, 151, 255, 55),
+            (panel.x + 18, divider_y),
+            (panel.right - 18, divider_y),
+            1,
         )
 
-    glyphs = [
-        font.render(ch, True, color)
-        for ch in text
+    for index, (heading, lines) in enumerate(sections):
+        column = index % columns
+        row = index // columns
+        x = panel.x + column * column_width + inner_margin_x
+        y = panel.y + row * row_height + inner_margin_y
+
+        heading_surface = small_font.render(heading, True, (88, 181, 255))
+        screen.blit(heading_surface, (x, y))
+
+        text_y = y + line_height + 7
+        section_bottom = panel.y + (row + 1) * row_height - 12
+
+        wrapped_lines = []
+        for line in lines:
+            wrapped_lines.extend(_wrap_text(small_font, line, max_text_width))
+
+        for line in wrapped_lines:
+            if text_y + line_height > section_bottom:
+                break
+            line_surface = small_font.render(line, True, (225, 230, 242))
+            screen.blit(line_surface, (x, text_y))
+            text_y += line_height
+
+    if footer:
+        footer_surface = small_font.render(footer, True, (170, 180, 205))
+        screen.blit(
+            footer_surface,
+            footer_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 22)),
+        )
+
+
+def how_to_play_menu(screen, font, small_font, title_font):
+    """游戏说明：四个独立可滚动信息格。
+
+    鼠标放在哪一格上滚轮，就只滚动那一格。
+    也可以单击某一格后使用 ↑/↓、W/S、PageUp/PageDown。
+    """
+    sections = [
+        (tr("how.p1"), tr_list("how.p1_lines")),
+        (tr("how.p2"), tr_list("how.p2_lines")),
+        (tr("how.rules"), tr_list("how.rule_lines")),
+        (tr("how.general"), tr_list("how.general_lines")),
+    ]
+    clock = pygame.time.Clock()
+    scroll_offsets = [0, 0, 0, 0]
+    active_section = 0
+
+    panel = pygame.Rect(78, 104, SCREEN_WIDTH - 156, SCREEN_HEIGHT - 164)
+    gap = 12
+    cell_width = (panel.width - gap) // 2
+    cell_height = (panel.height - gap) // 2
+    cells = [
+        pygame.Rect(panel.x, panel.y, cell_width, cell_height),
+        pygame.Rect(panel.x + cell_width + gap, panel.y, cell_width, cell_height),
+        pygame.Rect(panel.x, panel.y + cell_height + gap, cell_width, cell_height),
+        pygame.Rect(panel.x + cell_width + gap, panel.y + cell_height + gap, cell_width, cell_height),
     ]
 
-    width = sum(
-        glyph.get_width()
-        for glyph in glyphs
-    )
-    width += max(0, len(glyphs) - 1) * tracking
+    line_height = max(18, small_font.get_linesize() - 3)
+    heading_height = line_height + 18
+    text_pad_x = 22
+    text_pad_bottom = 14
 
-    height = max(
-        glyph.get_height()
-        for glyph in glyphs
-    )
+    def prepared_lines(index):
+        max_width = cells[index].width - text_pad_x * 2 - 14
+        wrapped = []
+        for raw in sections[index][1]:
+            wrapped.extend(_wrap_text(small_font, raw, max_width))
+        return wrapped
 
-    surface = pygame.Surface(
-        (max(1, width), max(1, height)),
-        pygame.SRCALPHA,
-    )
+    def max_scroll(index):
+        content_height = len(prepared_lines(index)) * line_height
+        visible_height = cells[index].height - heading_height - text_pad_bottom
+        return max(0, content_height - visible_height)
 
-    x = 0
-
-    for glyph in glyphs:
-        surface.blit(
-            glyph,
-            (
-                x,
-                (height - glyph.get_height()) // 2,
-            ),
-        )
-        x += glyph.get_width() + tracking
-
-    return surface
-
-
-def _wrap_text_tracked(
-    font,
-    text,
-    max_width,
-    tracking=1,
-):
-    """Wrap Chinese/English using the real tracked width."""
-    text = str(text).strip()
-
-    if not text:
-        return [""]
-
-    words = text.split(" ")
-
-    if len(words) == 1:
-        units = list(text)
-        separator = ""
-    else:
-        units = words
-        separator = " "
-
-    wrapped = []
-    current = ""
-
-    for unit in units:
-        candidate = (
-            unit
-            if not current
-            else current + separator + unit
-        )
-
-        if _tracked_text_width(
-            font,
-            candidate,
-            tracking,
-        ) <= max_width:
-            current = candidate
-            continue
-
-        if current:
-            wrapped.append(current)
-
-        if _tracked_text_width(
-            font,
-            unit,
-            tracking,
-        ) > max_width:
-            piece = ""
-
-            for character in unit:
-                candidate_piece = (
-                    piece + character
-                )
-
-                if (
-                    piece
-                    and _tracked_text_width(
-                        font,
-                        candidate_piece,
-                        tracking,
-                    ) > max_width
-                ):
-                    wrapped.append(piece)
-                    piece = character
-                else:
-                    piece = candidate_piece
-
-            current = piece
-        else:
-            current = unit
-
-    if current:
-        wrapped.append(current)
-
-    return wrapped
-
-
-def _build_scrollable_info_layout(
-    font,
-    small_font,
-    sections,
-    max_width,
-    accent,
-):
-    """Build relaxed reading layout for handbook/credits."""
-    tracking = (
-        2
-        if get_language() == "zh"
-        else 1
-    )
-
-    # 比原版本明显更宽松的行距。
-    line_height = max(
-        26,
-        small_font.get_linesize() + 7,
-    )
-
-    paragraph_gap = 8
-    section_gap = 30
-
-    items = []
-    y = 0
-
-    for section_index, (
-        heading,
-        lines,
-    ) in enumerate(sections):
-
-        if section_index:
-            y += section_gap
-
-        heading_surface = _render_tracked_text(
-            font,
-            heading,
-            accent,
-            tracking=1,
-        )
-
-        items.append(
-            (
-                "heading",
-                heading_surface,
-                y,
-            )
-        )
-
-        y += (
-            heading_surface.get_height()
-            + 16
-        )
-
-        for raw_line in lines:
-            wrapped = _wrap_text_tracked(
-                small_font,
-                raw_line,
-                max_width - 12,
-                tracking=tracking,
-            )
-
-            for line in wrapped:
-                body_surface = (
-                    _render_tracked_text(
-                        small_font,
-                        line,
-                        (225, 232, 244),
-                        tracking=tracking,
-                    )
-                )
-
-                items.append(
-                    (
-                        "body",
-                        body_surface,
-                        y,
-                    )
-                )
-
-                y += line_height
-
-            y += paragraph_gap
-
-        y += 4
-
-    return items, max(0, y)
-
-
-def _scrollable_info_menu(
-    screen,
-    font,
-    small_font,
-    title_font,
-    title,
-    sections,
-    accent=(62, 151, 255),
-):
-    """Unified scrollable reading page."""
-    clock = pygame.time.Clock()
-
-    panel = pygame.Rect(
-        72,
-        98,
-        SCREEN_WIDTH - 144,
-        SCREEN_HEIGHT - 158,
-    )
-
-    viewport = pygame.Rect(
-        panel.x + 34,
-        panel.y + 26,
-        panel.width - 74,
-        panel.height - 52,
-    )
-
-    back_rect = pygame.Rect(
-        18,
-        18,
-        150,
-        38,
-    )
-
-    items, content_height = (
-        _build_scrollable_info_layout(
-            font,
-            small_font,
-            sections,
-            viewport.width,
-            accent,
-        )
-    )
-
-    maximum = max(
-        0,
-        content_height - viewport.height,
-    )
-
-    scroll_y = 0
-
-    def clamp_scroll(value):
-        return max(
-            0,
-            min(
-                int(value),
-                maximum,
-            ),
-        )
+    def clamp_scroll(index):
+        scroll_offsets[index] = max(0, min(scroll_offsets[index], max_scroll(index)))
 
     while True:
+        mouse_pos = pygame.mouse.get_pos()
+        hovered = next((i for i, rect in enumerate(cells) if rect.collidepoint(mouse_pos)), None)
 
         for event in pygame.event.get():
-
             if event.type == pygame.QUIT:
                 return "quit"
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-
-                if (
-                    event.button == 1
-                    and back_rect.collidepoint(
-                        event.pos
-                    )
-                ):
-                    return "back"
-
-                # 兼容旧版 Pygame / macOS 滚轮事件。
-                if event.button == 4:
-                    scroll_y = clamp_scroll(
-                        scroll_y - 72
-                    )
-
-                elif event.button == 5:
-                    scroll_y = clamp_scroll(
-                        scroll_y + 72
-                    )
+                if event.button == 1 and hovered is not None:
+                    active_section = hovered
+                elif event.button in (4, 5):
+                    target = hovered if hovered is not None else active_section
+                    scroll_offsets[target] += -line_height * 3 if event.button == 4 else line_height * 3
+                    clamp_scroll(target)
 
             if event.type == pygame.MOUSEWHEEL:
-                scroll_y = clamp_scroll(
-                    scroll_y
-                    - event.y * 72
-                )
+                target = hovered if hovered is not None else active_section
+                scroll_offsets[target] -= event.y * line_height * 3
+                clamp_scroll(target)
 
             if event.type == pygame.KEYDOWN:
-
-                if event.key in (
-                    pygame.K_ESCAPE,
-                    pygame.K_q,
-                    pygame.K_RETURN,
-                    pygame.K_SPACE,
-                ):
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
                     return "back"
-
-                if event.key in (
-                    pygame.K_UP,
-                    pygame.K_w,
-                ):
-                    scroll_y = clamp_scroll(
-                        scroll_y - 34
-                    )
-
-                elif event.key in (
-                    pygame.K_DOWN,
-                    pygame.K_s,
-                ):
-                    scroll_y = clamp_scroll(
-                        scroll_y + 34
-                    )
-
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    scroll_offsets[active_section] -= line_height
+                    clamp_scroll(active_section)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    scroll_offsets[active_section] += line_height
+                    clamp_scroll(active_section)
                 elif event.key == pygame.K_PAGEUP:
-                    scroll_y = clamp_scroll(
-                        scroll_y
-                        - max(
-                            80,
-                            viewport.height - 70,
-                        )
-                    )
-
+                    scroll_offsets[active_section] -= cells[active_section].height // 2
+                    clamp_scroll(active_section)
                 elif event.key == pygame.K_PAGEDOWN:
-                    scroll_y = clamp_scroll(
-                        scroll_y
-                        + max(
-                            80,
-                            viewport.height - 70,
-                        )
-                    )
-
+                    scroll_offsets[active_section] += cells[active_section].height // 2
+                    clamp_scroll(active_section)
                 elif event.key == pygame.K_HOME:
-                    scroll_y = 0
-
+                    scroll_offsets[active_section] = 0
                 elif event.key == pygame.K_END:
-                    scroll_y = maximum
+                    scroll_offsets[active_section] = max_scroll(active_section)
 
-        _draw_backdrop(
-            screen,
-            accent,
-        )
+        _draw_backdrop(screen, (62, 151, 255))
+        title_surface = title_font.render(tr("how.title"), True, COLOR_TEXT)
+        screen.blit(title_surface, title_surface.get_rect(center=(SCREEN_WIDTH // 2, 62)))
 
-        title_surface = title_font.render(
-            title,
-            True,
-            COLOR_TEXT,
-        )
+        for index, rect in enumerate(cells):
+            is_active = index == active_section
+            is_hovered = index == hovered
+            accent = (255, 132, 55) if is_active else ((88, 181, 255) if is_hovered else (62, 151, 255))
+            _draw_panel(screen, rect, accent=accent, alpha=232)
 
-        screen.blit(
-            title_surface,
-            title_surface.get_rect(
-                center=(
-                    SCREEN_WIDTH // 2,
-                    60,
-                )
-            ),
-        )
+            heading = small_font.render(sections[index][0], True, accent)
+            screen.blit(heading, (rect.x + text_pad_x, rect.y + 14))
 
-        _draw_panel(
-            screen,
-            panel,
-            accent=accent,
-            alpha=236,
-            radius=18,
-        )
-
-        old_clip = screen.get_clip()
-        screen.set_clip(viewport)
-
-        for (
-            kind,
-            surface,
-            content_y,
-        ) in items:
-
-            draw_y = (
-                viewport.y
-                + content_y
-                - scroll_y
+            # 独立内容视口：所有正文只会绘制在自己的格子内。
+            content_rect = pygame.Rect(
+                rect.x + text_pad_x,
+                rect.y + heading_height,
+                rect.width - text_pad_x * 2 - 10,
+                rect.height - heading_height - text_pad_bottom,
             )
+            old_clip = screen.get_clip()
+            screen.set_clip(content_rect)
 
-            if (
-                draw_y
-                + surface.get_height()
-                < viewport.y
-            ):
-                continue
+            y = content_rect.y - scroll_offsets[index]
+            for line in prepared_lines(index):
+                surface = small_font.render(line, True, (225, 230, 242))
+                screen.blit(surface, (content_rect.x, y))
+                y += line_height
 
-            if draw_y > viewport.bottom:
-                continue
+            screen.set_clip(old_clip)
 
-            if kind == "heading":
-                draw_x = viewport.x
+            # 右侧滚动条。内容能滚动时才显示滑块。
+            maximum = max_scroll(index)
+            if maximum > 0:
+                track = pygame.Rect(rect.right - 10, content_rect.y, 4, content_rect.height)
+                pygame.draw.rect(screen, (39, 55, 82), track, border_radius=2)
 
-                screen.blit(
-                    surface,
-                    (
-                        draw_x,
-                        draw_y,
-                    ),
-                )
+                total_height = content_rect.height + maximum
+                thumb_height = max(24, int(content_rect.height * (content_rect.height / total_height)))
+                travel = max(1, track.height - thumb_height)
+                ratio = scroll_offsets[index] / maximum if maximum else 0
+                thumb = pygame.Rect(track.x, track.y + int(travel * ratio), track.width, thumb_height)
+                pygame.draw.rect(screen, accent, thumb, border_radius=2)
 
-                # 标题右侧细分隔线。
-                line_x = (
-                    draw_x
-                    + surface.get_width()
-                    + 16
-                )
-
-                line_y = (
-                    draw_y
-                    + surface.get_height() // 2
-                )
-
-                if line_x < viewport.right - 8:
-                    pygame.draw.line(
+                # 小提示箭头，提醒玩家这一格还有更多内容。
+                if scroll_offsets[index] < maximum:
+                    arrow_y = rect.bottom - 9
+                    pygame.draw.polygon(
                         screen,
                         accent,
-                        (
-                            line_x,
-                            line_y,
-                        ),
-                        (
-                            viewport.right - 8,
-                            line_y,
-                        ),
-                        1,
+                        [(rect.centerx - 5, arrow_y - 4), (rect.centerx + 5, arrow_y - 4), (rect.centerx, arrow_y + 2)],
                     )
 
-            else:
-                screen.blit(
-                    surface,
-                    (
-                        viewport.x + 8,
-                        draw_y,
-                    ),
-                )
-
-        screen.set_clip(old_clip)
-
-        # 右侧滚动条。
-        if maximum > 0:
-
-            track = pygame.Rect(
-                panel.right - 17,
-                viewport.y,
-                5,
-                viewport.height,
-            )
-
-            pygame.draw.rect(
-                screen,
-                (42, 57, 82),
-                track,
-                border_radius=3,
-            )
-
-            total_height = (
-                viewport.height
-                + maximum
-            )
-
-            thumb_height = max(
-                34,
-                int(
-                    viewport.height
-                    * viewport.height
-                    / total_height
-                ),
-            )
-
-            travel = max(
-                1,
-                track.height
-                - thumb_height,
-            )
-
-            ratio = (
-                scroll_y / maximum
-                if maximum
-                else 0.0
-            )
-
-            thumb = pygame.Rect(
-                track.x,
-                track.y
-                + int(
-                    travel
-                    * ratio
-                ),
-                track.width,
-                thumb_height,
-            )
-
-            pygame.draw.rect(
-                screen,
-                accent,
-                thumb,
-                border_radius=3,
-            )
-
-        _draw_back_button(
-            screen,
-            small_font,
-        )
-
-        if get_language() == "zh":
-            hint_text = (
-                "滚轮 / W S / ↑↓：上下阅读"
-                "    •    "
-                "Q / ESC：返回"
-            )
-        else:
-            hint_text = (
-                "Wheel / W S / ↑↓: scroll"
-                "    •    "
-                "Q / ESC: back"
-            )
-
-        hint = small_font.render(
-            hint_text,
-            True,
-            (170, 182, 207),
-        )
-
-        screen.blit(
-            hint,
-            hint.get_rect(
-                center=(
-                    SCREEN_WIDTH // 2,
-                    SCREEN_HEIGHT - 20,
-                )
-            ),
-        )
+        footer_text = tr("common.footer_back")
+        scroll_hint = "滚轮 / ↑↓：滚动当前格" if get_language() == "zh" else "Wheel / ↑↓: scroll selected panel"
+        footer = small_font.render(f"{scroll_hint}    •    {footer_text}", True, (170, 180, 205))
+        screen.blit(footer, footer.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 22)))
 
         pygame.display.flip()
         clock.tick(FPS)
 
-
-def how_to_play_menu(
-    screen,
-    font,
-    small_font,
-    title_font,
-):
-    """Single-column scrollable handbook."""
+def credits_menu(screen, font, small_font, title_font):
     sections = [
-        (
-            tr("how.p1"),
-            tr_list("how.p1_lines"),
-        ),
-        (
-            tr("how.p2"),
-            tr_list("how.p2_lines"),
-        ),
-        (
-            tr("how.rules"),
-            tr_list("how.rule_lines"),
-        ),
-        (
-            tr("how.general"),
-            tr_list("how.general_lines"),
-        ),
+        (tr("credits.creator"), tr_list("credits.creator_lines")),
+        (tr("credits.development"), tr_list("credits.development_lines")),
+        (tr("credits.thanks"), tr_list("credits.thanks_lines")),
+        (tr("credits.notice"), tr_list("credits.notice_lines")),
     ]
-
-    return _scrollable_info_menu(
-        screen,
-        font,
-        small_font,
-        title_font,
-        tr("how.title"),
-        sections,
-        accent=(62, 151, 255),
-    )
-
-
-def credits_menu(
-    screen,
-    font,
-    small_font,
-    title_font,
-):
-    """Scrollable credits and thanks page."""
-    sections = [
-        (
-            tr("credits.creator"),
-            tr_list(
-                "credits.creator_lines"
-            ),
-        ),
-        (
-            tr("credits.development"),
-            tr_list(
-                "credits.development_lines"
-            ),
-        ),
-        (
-            tr("credits.thanks"),
-            tr_list(
-                "credits.thanks_lines"
-            ),
-        ),
-        (
-            tr("credits.notice"),
-            tr_list(
-                "credits.notice_lines"
-            ),
-        ),
-    ]
-
-    return _scrollable_info_menu(
-        screen,
-        font,
-        small_font,
-        title_font,
-        tr("credits.title"),
-        sections,
-        accent=(255, 132, 55),
-    )
-
+    clock = pygame.time.Clock()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                return "back"
+        _info_page(
+            screen,
+            title_font,
+            small_font,
+            tr("credits.title"),
+            sections,
+            footer=tr("common.footer_back"),
+        )
+        pygame.display.flip()
+        clock.tick(FPS)
 
 FEEDBACK_ISSUE_URL = "https://github.com/jinhaodu1203/basketball-brawl/issues/new"
 

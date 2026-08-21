@@ -1,0 +1,18 @@
+﻿Asset: HOOP HAVOC Application Icon / HH Logo
+Files:
+- assets/HOOP_HAVOC.ico
+- assets/icon/hoop_havoc_icon.ico
+- assets/icon/hoop_havoc_icon.png
+
+Source: Generative AI
+Usage: Application icon / game branding artwork
+Commercial Use: Intended for commercial use in HOOP HAVOC
+
+Steam Disclosure:
+This artwork should be disclosed as Pre-Generated AI Content.
+
+Description for Steam:
+Pre-generated AI tools were used during development to create the
+HOOP HAVOC application icon/logo artwork. The final artwork was
+reviewed and selected by the developer. No AI content is generated
+while the game is running.

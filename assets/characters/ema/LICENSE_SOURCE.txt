@@ -1,1 +1,7 @@
-https://craftpix.net/file-licenses/
+﻿Source: CraftPix
+Pack: Free Gorgon Pixel Art Character Sprite Sheets
+Product URL: https://craftpix.net/freebies/free-gorgon-pixel-art-character-sprite-sheets/
+License: CraftPix License
+Commercial Game Use: Allowed
+Distribution in Games: Allowed
+Notes: Gorgon sprite assets used for EMA in HOOP HAVOC.
