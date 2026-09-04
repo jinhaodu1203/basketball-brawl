@@ -1659,10 +1659,132 @@ def _draw_back_button(screen, font):
 
 
 def main_menu(screen, font, small_font, title_font):
-    """正式主菜单。支持键盘与鼠标。"""
+    # 正式主菜单：键盘、鼠标，以及带确认层的安全退出。
     selected = 0
     clock = pygame.time.Clock()
     entrance_started_at = pygame.time.get_ticks()
+
+    quit_confirm_open = False
+    quit_selected = 0  # 0 = 返回游戏, 1 = 退出游戏
+
+    def quit_labels():
+        if get_language() == "zh":
+            return {
+                "kicker": "SYSTEM // EXIT",
+                "title": "退出 HOOP HAVOC？",
+                "body": "确定要关闭游戏吗？",
+                "sub": "返回可继续浏览主菜单。",
+                "back": "返回游戏",
+                "quit": "退出游戏",
+                "hint": "← / → 选择   ENTER 确认   ESC 返回",
+            }
+        return {
+            "kicker": "SYSTEM // EXIT",
+            "title": "QUIT HOOP HAVOC?",
+            "body": "Are you sure you want to close the game?",
+            "sub": "Return to keep browsing the main menu.",
+            "back": "BACK",
+            "quit": "QUIT GAME",
+            "hint": "← / → SELECT   ENTER CONFIRM   ESC BACK",
+        }
+
+    def quit_rects():
+        return (
+            pygame.Rect(318, 330, 150, 48),
+            pygame.Rect(492, 330, 150, 48),
+        )
+
+    def draw_quit_confirmation():
+        labels = quit_labels()
+
+        veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        veil.fill((2, 5, 12, 190))
+        screen.blit(veil, (0, 0))
+
+        card = pygame.Rect(248, 122, 464, 292)
+
+        shadow = pygame.Surface((card.width + 24, card.height + 24), pygame.SRCALPHA)
+        pygame.draw.rect(
+            shadow,
+            (0, 0, 0, 150),
+            shadow.get_rect(),
+            border_radius=22,
+        )
+        screen.blit(shadow, (card.x - 2, card.y + 8))
+
+        panel = pygame.Surface(card.size, pygame.SRCALPHA)
+        pygame.draw.rect(panel, (10, 16, 31, 248), panel.get_rect(), border_radius=18)
+        pygame.draw.rect(panel, (255, 132, 55, 220), panel.get_rect(), 2, border_radius=18)
+        pygame.draw.line(panel, (255, 132, 55, 235), (26, 2), (card.width - 26, 2), 3)
+        screen.blit(panel, card)
+
+        kicker = small_font.render(labels["kicker"], True, (255, 153, 76))
+        screen.blit(kicker, kicker.get_rect(center=(card.centerx, card.y + 34)))
+
+        icon_center = (card.centerx, card.y + 78)
+        pygame.draw.circle(screen, (255, 132, 55), icon_center, 20, 2)
+        pygame.draw.line(
+            screen,
+            (255, 190, 120),
+            (icon_center[0], icon_center[1] - 9),
+            (icon_center[0], icon_center[1] + 3),
+            3,
+        )
+        pygame.draw.circle(
+            screen,
+            (255, 190, 120),
+            (icon_center[0], icon_center[1] + 10),
+            2,
+        )
+
+        heading = title_font.render(labels["title"], True, COLOR_TEXT)
+        max_heading_width = card.width - 56
+        if heading.get_width() > max_heading_width:
+            scale = max_heading_width / heading.get_width()
+            heading = pygame.transform.smoothscale(
+                heading,
+                (
+                    max_heading_width,
+                    max(1, int(heading.get_height() * scale)),
+                ),
+            )
+        screen.blit(heading, heading.get_rect(center=(card.centerx, card.y + 126)))
+
+        body = font.render(labels["body"], True, (220, 228, 242))
+        screen.blit(body, body.get_rect(center=(card.centerx, card.y + 171)))
+
+        sub = small_font.render(labels["sub"], True, (145, 164, 193))
+        screen.blit(sub, sub.get_rect(center=(card.centerx, card.y + 199)))
+
+        back_rect, quit_rect = quit_rects()
+        mouse_pos = pygame.mouse.get_pos()
+
+        hovered_index = None
+        if back_rect.collidepoint(mouse_pos):
+            hovered_index = 0
+        elif quit_rect.collidepoint(mouse_pos):
+            hovered_index = 1
+
+        active_index = hovered_index if hovered_index is not None else quit_selected
+
+        back_active = active_index == 0
+        back_fill = (33, 53, 82) if back_active else (18, 28, 48)
+        back_border = (255, 132, 55) if back_active else (70, 88, 116)
+        pygame.draw.rect(screen, back_fill, back_rect, border_radius=10)
+        pygame.draw.rect(screen, back_border, back_rect, 2, border_radius=10)
+        back_text = font.render(labels["back"], True, COLOR_TEXT)
+        screen.blit(back_text, back_text.get_rect(center=back_rect.center))
+
+        quit_active = active_index == 1
+        quit_fill = (103, 33, 39) if quit_active else (45, 23, 31)
+        quit_border = (255, 88, 96) if quit_active else (126, 57, 65)
+        pygame.draw.rect(screen, quit_fill, quit_rect, border_radius=10)
+        pygame.draw.rect(screen, quit_border, quit_rect, 2, border_radius=10)
+        quit_text = font.render(labels["quit"], True, (255, 232, 232))
+        screen.blit(quit_text, quit_text.get_rect(center=quit_rect.center))
+
+        hint = small_font.render(labels["hint"], True, (125, 145, 176))
+        screen.blit(hint, hint.get_rect(center=(card.centerx, card.bottom - 18)))
 
     while True:
         options = [
@@ -1673,26 +1795,81 @@ def main_menu(screen, font, small_font, title_font):
             (tr("menu.feedback"), "feedback"),
             (tr("menu.quit"), "quit"),
         ]
-        rects = [pygame.Rect(595, 148 + i * 54, 300, 44) for i in range(len(options))]
-        hovered = _mouse_selected(rects)
-        if hovered is not None:
-            selected = hovered
+        rects = [
+            pygame.Rect(595, 148 + i * 54, 300, 44)
+            for i in range(len(options))
+        ]
+
+        if not quit_confirm_open:
+            hovered = _mouse_selected(rects)
+            if hovered is not None:
+                selected = hovered
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return "quit"
+                quit_confirm_open = True
+                quit_selected = 0
+                continue
+
+            if quit_confirm_open:
+                back_rect, quit_rect = quit_rects()
+
+                if event.type == pygame.MOUSEMOTION:
+                    if back_rect.collidepoint(event.pos):
+                        quit_selected = 0
+                    elif quit_rect.collidepoint(event.pos):
+                        quit_selected = 1
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if back_rect.collidepoint(event.pos):
+                        quit_confirm_open = False
+                        quit_selected = 0
+                    elif quit_rect.collidepoint(event.pos):
+                        return "quit"
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        quit_confirm_open = False
+                        quit_selected = 0
+                    elif event.key in (
+                        pygame.K_LEFT,
+                        pygame.K_RIGHT,
+                        pygame.K_a,
+                        pygame.K_d,
+                        pygame.K_TAB,
+                    ):
+                        quit_selected = 1 - quit_selected
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        if quit_selected == 0:
+                            quit_confirm_open = False
+                        else:
+                            return "quit"
+                continue
+
             clicked = _clicked_index(event, rects)
             if clicked is not None:
-                return options[clicked][1]
+                action = options[clicked][1]
+                if action == "quit":
+                    quit_confirm_open = True
+                    quit_selected = 0
+                else:
+                    return action
+
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_UP, pygame.K_w):
                     selected = (selected - 1) % len(options)
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
                     selected = (selected + 1) % len(options)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    return options[selected][1]
+                    action = options[selected][1]
+                    if action == "quit":
+                        quit_confirm_open = True
+                        quit_selected = 0
+                    else:
+                        return action
                 elif event.key == pygame.K_ESCAPE:
-                    return "quit"
+                    quit_confirm_open = True
+                    quit_selected = 0
 
         _draw_backdrop(screen)
         pygame.draw.rect(screen, (255, 132, 55), (62, 48, 68, 5), border_radius=2)
@@ -1715,10 +1892,20 @@ def main_menu(screen, font, small_font, title_font):
         screen.blit(menu_title, (595, 116))
 
         for index, (label, _) in enumerate(options):
-            _draw_menu_button(screen, font, label, rects[index], index == selected)
+            _draw_menu_button(
+                screen,
+                font,
+                label,
+                rects[index],
+                index == selected and not quit_confirm_open,
+            )
 
         hint = small_font.render(tr("menu.hint"), True, (142, 158, 184))
         screen.blit(hint, hint.get_rect(midright=(895, 510)))
+
+        if quit_confirm_open:
+            draw_quit_confirmation()
+
         pygame.display.flip()
         clock.tick(FPS)
 
